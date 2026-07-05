@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: projectmanager
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: MONGO_URI
+        sync: false          # set this in the Render dashboard (secret)
+      - key: DB_NAME
+        value: projectmanager

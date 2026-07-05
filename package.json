@@ -1,0 +1,16 @@
+{
+  "name": "projectmanager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cadence — Boards / Base / Time suite with MongoDB-backed state.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "mongodb": "^7.4.0"
+  }
+}
