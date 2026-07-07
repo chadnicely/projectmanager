@@ -155,7 +155,9 @@ async function applyWebhook(body, db, helpers) {
   const accessId = pick('access_level_id');                     if (accessId != null) set.sobAccessLevelId = Number(accessId) || accessId;
   const plan = pick('plan', 'access_level', 'access_level_slug', 'access_level_value'); if (plan != null) set.sobPlan = String(plan);
   const userType = pick('user_type_id', 'user_type');           if (userType != null) set.sobUserType = userType;
-  const password = pick('password');                            if (password) { const { salt, hash } = hashPassword(String(password)); set.salt = salt; set.hash = hash; }
+  const password = pick('password');
+  // Only accept a real password — never store an unresolved "{{...}}" template as the password.
+  if (password && !String(password).includes('{{')) { const { salt, hash } = hashPassword(String(password)); set.salt = salt; set.hash = hash; }
   set.sobSyncedAt = new Date().toISOString();
 
   await users.updateOne(
