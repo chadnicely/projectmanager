@@ -10,6 +10,7 @@ const path = require('path');
 const { hashPassword, verifyPassword, newToken } = require('./auth.js');
 
 const ROOT = __dirname;
+const PUBLIC = path.join(ROOT, 'public');   // static assets live here (served by Vercel's CDN in prod)
 const PORT = process.env.PORT || 4100;
 
 // ---- config (env first, then local file) --------------------------------
@@ -190,6 +191,15 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
+// Preload static assets into memory at startup. The literal path.join(__dirname, 'public', '…')
+// calls let Vercel's file tracer detect and bundle these files with the service.
+const STATIC = {};
+try { STATIC['/index.html'] = fs.readFileSync(path.join(__dirname, 'public', 'index.html')); } catch (_) {}
+try { STATIC['/sw.js'] = fs.readFileSync(path.join(__dirname, 'public', 'sw.js')); } catch (_) {}
+try { STATIC['/manifest.webmanifest'] = fs.readFileSync(path.join(__dirname, 'public', 'manifest.webmanifest')); } catch (_) {}
+try { STATIC['/icon-192.png'] = fs.readFileSync(path.join(__dirname, 'public', 'icon-192.png')); } catch (_) {}
+try { STATIC['/icon-512.png'] = fs.readFileSync(path.join(__dirname, 'public', 'icon-512.png')); } catch (_) {}
+
 function requestHandler(req, res) {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
 
@@ -199,24 +209,25 @@ function requestHandler(req, res) {
   }
 
   if (urlPath === '/') urlPath = '/index.html';
-  // prevent path traversal
-  const filePath = path.join(ROOT, path.normalize(urlPath).replace(/^(\.\.[/\\])+/, ''));
-  if (!filePath.startsWith(ROOT)) { res.writeHead(403); return res.end('Forbidden'); }
 
+  // Serve from the in-memory static map (works both locally and bundled on Vercel).
+  const cached = STATIC[urlPath];
+  if (cached) {
+    const ext = path.extname(urlPath).toLowerCase();
+    res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    return res.end(cached);
+  }
+  // On disk fallback (covers any asset not preloaded, e.g. during local dev).
+  const filePath = path.join(PUBLIC, path.normalize(urlPath).replace(/^(\.\.[/\\])+/, ''));
+  if (!filePath.startsWith(PUBLIC)) { res.writeHead(403); return res.end('Forbidden'); }
   fs.readFile(filePath, (err, data) => {
     if (err) {
       // SPA-ish fallback to index.html for unknown routes
-      return fs.readFile(path.join(ROOT, 'index.html'), (e2, idx) => {
-        if (e2) { res.writeHead(404); return res.end('Not found'); }
-        res.writeHead(200, { 'Content-Type': TYPES['.html'] });
-        res.end(idx);
-      });
+      if (STATIC['/index.html']) { res.writeHead(200, { 'Content-Type': TYPES['.html'] }); return res.end(STATIC['/index.html']); }
+      res.writeHead(404); return res.end('Not found');
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, {
-      'Content-Type': TYPES[ext] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
-    });
+    res.writeHead(200, { 'Content-Type': TYPES[ext] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 }
