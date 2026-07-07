@@ -155,9 +155,17 @@ async function applyWebhook(body, db, helpers) {
   const accessId = pick('access_level_id');                     if (accessId != null) set.sobAccessLevelId = Number(accessId) || accessId;
   const plan = pick('plan', 'access_level', 'access_level_slug', 'access_level_value'); if (plan != null) set.sobPlan = String(plan);
   const userType = pick('user_type_id', 'user_type');           if (userType != null) set.sobUserType = userType;
-  const password = pick('password');
-  // Only accept a real password — never store an unresolved "{{...}}" template as the password.
-  if (password && !String(password).includes('{{')) { const { salt, hash } = hashPassword(String(password)); set.salt = salt; set.hash = hash; }
+  // Password: use SOB's if it sent a real one (not an unresolved "{{...}}"). If SOB doesn't
+  // send a password (it currently doesn't), fall back to a default so the user can still log in
+  // — but only for users who don't already have a password, so real ones are never overwritten.
+  // (Temporary until SOB is set up to send passwords; our auth system itself is unchanged.)
+  const rawPw = pick('password');
+  let pwToSet = (rawPw && !String(rawPw).includes('{{')) ? String(rawPw) : null;
+  if (!pwToSet) {
+    const existing = await users.findOne({ _id: email }, { projection: { hash: 1 } });
+    if (!existing || !existing.hash) pwToSet = process.env.SOB_DEFAULT_PASSWORD || 'Project123';
+  }
+  if (pwToSet) { const { salt, hash } = hashPassword(pwToSet); set.salt = salt; set.hash = hash; }
   set.sobSyncedAt = new Date().toISOString();
 
   await users.updateOne(
