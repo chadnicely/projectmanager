@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { hashPassword, verifyPassword, newToken } = require('./auth.js');
+const sob = require('./sob.js');   // SaaSOnboard (SOB) Connect — mirror users + access
 
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');   // static assets live here (served by Vercel's CDN in prod)
@@ -97,6 +98,27 @@ async function handleApi(req, res, urlPath) {
     catch (e) { return sendJson(res, 503, { ok: false, error: e.message }); }
   }
 
+  // SOB -> app webhooks. SOB posts one endpoint per event, so we accept any path under
+  // /api/sob/ and take the event from the last path segment (e.g. /api/sob/user-created,
+  // /api/sob/user-deleted). A single /api/sob/webhook with the event in the body also works.
+  // Authenticated by a shared secret (the connection's Bearer auth in SOB), not a session.
+  if (urlPath.startsWith('/api/sob/')) {
+    const eventFromPath = decodeURIComponent(urlPath.slice('/api/sob/'.length)).replace(/\/+$/, '');
+    if (req.method === 'GET') return sendJson(res, 200, { ok: true, service: 'project-manager', endpoint: eventFromPath || 'root', webhook: 'ready' }); // URL-verification ping
+    if (req.method === 'POST') {
+      if (!sob.verifyWebhookRequest(req)) return sendJson(res, 401, { error: 'Invalid or missing webhook secret' });
+      try {
+        const body = await readJson(req, 256 * 1024);
+        if (!body || typeof body !== 'object') return sendJson(res, 400, { error: 'Expected a JSON body' });
+        const db = await getDb();
+        const evt = (eventFromPath === 'webhook') ? '' : eventFromPath;   // /webhook -> event comes from body
+        const result = await sob.applyWebhook(body, db, { hashPassword, normEmail, eventFromPath: evt });
+        return sendJson(res, result.ok ? 200 : 400, result);
+      } catch (e) { return sendJson(res, 500, { error: e.message }); }
+    }
+    return sendJson(res, 405, { error: 'Method not allowed' });
+  }
+
   // POST /api/signup — create an account { email, password, name? }
   if (urlPath === '/api/signup' && req.method === 'POST') {
     try {
@@ -108,9 +130,11 @@ async function handleApi(req, res, urlPath) {
       const exists = await db.collection(USERS).findOne({ _id: email });
       if (exists) return sendJson(res, 409, { error: 'An account with that email already exists' });
       const { salt, hash } = hashPassword(password);
-      await db.collection(USERS).insertOne({ _id: email, name: (body.name || '').trim() || email, salt, hash, createdAt: new Date().toISOString() });
+      const name = (body.name || '').trim() || email;
+      await db.collection(USERS).insertOne({ _id: email, name, salt, hash, createdAt: new Date().toISOString() });
+      await sob.provisionUser({ email, name, password });   // SOB is the source of truth for accounts/access (best-effort)
       const token = await startSession(db, email);
-      return sendJson(res, 200, { token, user: { email, name: (body.name || '').trim() || email } });
+      return sendJson(res, 200, { token, user: { email, name } });
     } catch (e) { return sendJson(res, 503, { error: e.message }); }
   }
 
@@ -122,7 +146,12 @@ async function handleApi(req, res, urlPath) {
       const db = await getDb();
       const u = await db.collection(USERS).findOne({ _id: email });
       if (!u || !verifyPassword(password, u.salt, u.hash)) return sendJson(res, 401, { error: 'Wrong email or password' });
+      // SOB controls access. The webhooks keep u.sobStatus fresh, so gate on that (fast, no per-login SOB call).
+      if (u.sobStatus && String(u.sobStatus).toLowerCase() !== 'active') {
+        return sendJson(res, 403, { error: 'Your account is ' + u.sobStatus + ' in SOB.' });
+      }
       const token = await startSession(db, email);
+      sob.recordLogin(email);   // best-effort, don't block the login on it
       return sendJson(res, 200, { token, user: publicUser(u) });
     } catch (e) { return sendJson(res, 503, { error: e.message }); }
   }

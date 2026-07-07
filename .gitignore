@@ -12,3 +12,5 @@ _createuser.js
 .env*
 
 .cf-token
+
+connect-bootstrap.json

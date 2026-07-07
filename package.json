@@ -8,9 +8,10 @@
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "22.x"
   },
   "dependencies": {
-    "mongodb": "^7.4.0"
+    "mongodb": "^7.4.0",
+    "sob-connect-sdk": "^0.1.0"
   }
 }
