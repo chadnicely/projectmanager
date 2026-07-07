@@ -1634,7 +1634,10 @@ Chad,chad@cen.com,Austin"></textarea>
       } else {
         pushRemote();                         // server empty → seed it from local
       }
-    }catch(_){ /* offline — keep working from the local copy */ }
+    }catch(e){ /* offline — keep working from the local copy */
+      console.error('[state load/render error]', e);
+      try{ document.body.insertAdjacentHTML('afterbegin', '<div id="__diag" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#e2445c;color:#fff;padding:10px 14px;font:12px/1.5 ui-monospace,monospace;white-space:pre-wrap;max-height:45vh;overflow:auto">RENDER ERROR (copy this to Claude):\n\n'+((e&&e.stack)||String(e))+'</div>'); }catch(_){}
+    }
   }
   const nComments = it => (it.commentList&&it.commentList.length) || it.comments || 0;
   const nFiles    = it => (it.fileList&&it.fileList.length) || it.docs || 0;
