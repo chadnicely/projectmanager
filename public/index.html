@@ -2977,7 +2977,7 @@ Chad,chad@cen.com,Austin"></textarea>
     scr.innerHTML=`
       <div class="bt-tabs">${tabs}</div>
       ${toolbar}
-      <div class="bg-wrap"><div class="bg-grid">${header}${rows}<div class="bg-addrow" id="bg-addrow">＋ Add row</div>${filler}</div></div>`;
+      <div class="bg-wrap"><div class="bg-grid">${header}${rows}${filler}<div class="bg-addrow" id="bg-addrow">＋ Add row</div></div></div>`;
     renderBaseViews();
     const onb=scr.querySelector('.bg-onboard');
     if(onb){ onb.querySelector('[data-act="addrow"]')?.addEventListener('click',addBaseRow); onb.querySelector('[data-act="import"]')?.addEventListener('click',()=>openBaseImport()); }
