@@ -10,3 +10,5 @@ _createuser.js
 
 .vercel
 .env*
+
+.cf-token
