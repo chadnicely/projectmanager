@@ -7,6 +7,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { hashPassword, verifyPassword, newToken } = require('./auth.js');
 
 const ROOT = __dirname;
 const PORT = process.env.PORT || 4100;
@@ -18,6 +19,9 @@ const MONGO_URI = process.env.MONGO_URI || cfg.MONGO_URI || '';
 const DB_NAME   = process.env.DB_NAME   || cfg.DB_NAME   || 'projectmanager';
 const STATE_COLLECTION = 'appstate';
 const STATE_ID = 'main'; // single-workspace document for now
+const USERS = 'users';
+const SESSIONS = 'sessions';
+const SESSION_DAYS = 30;
 
 // ---- lazy Mongo connection (reused across requests) ----------------------
 let _clientPromise = null;
@@ -53,13 +57,91 @@ function readBody(req, limitBytes) {
   });
 }
 
+async function readJson(req, limitBytes) {
+  const raw = await readBody(req, limitBytes || 64 * 1024);
+  try { return JSON.parse(raw); } catch (_) { return null; }
+}
+
+const normEmail = e => String(e || '').trim().toLowerCase();
+const bearer = req => (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+
+// Resolve the session token on a request → user doc, or null if unauthenticated/expired.
+async function authUser(req) {
+  const token = bearer(req);
+  if (!token) return null;
+  const db = await getDb();
+  const sess = await db.collection(SESSIONS).findOne({ _id: token });
+  if (!sess) return null;
+  if (sess.expiresAt && new Date(sess.expiresAt) < new Date()) {
+    await db.collection(SESSIONS).deleteOne({ _id: token }).catch(() => {});
+    return null;
+  }
+  return db.collection(USERS).findOne({ _id: sess.email });
+}
+
+async function startSession(db, email) {
+  const token = newToken();
+  const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5).toISOString();
+  await db.collection(SESSIONS).insertOne({ _id: token, email, createdAt: new Date().toISOString(), expiresAt });
+  return token;
+}
+
+const publicUser = u => ({ email: u._id, name: u.name || u._id });
+
 // ---- API -----------------------------------------------------------------
 async function handleApi(req, res, urlPath) {
-  // GET /api/health — connectivity probe
+  // GET /api/health — connectivity probe (public)
   if (urlPath === '/api/health' && req.method === 'GET') {
     try { await getDb().then(db => db.command({ ping: 1 })); return sendJson(res, 200, { ok: true, db: DB_NAME }); }
     catch (e) { return sendJson(res, 503, { ok: false, error: e.message }); }
   }
+
+  // POST /api/signup — create an account { email, password, name? }
+  if (urlPath === '/api/signup' && req.method === 'POST') {
+    try {
+      const body = await readJson(req); if (!body) return sendJson(res, 400, { error: 'Invalid JSON' });
+      const email = normEmail(body.email), password = String(body.password || '');
+      if (!email || !password) return sendJson(res, 400, { error: 'Email and password required' });
+      if (password.length < 6) return sendJson(res, 400, { error: 'Password must be at least 6 characters' });
+      const db = await getDb();
+      const exists = await db.collection(USERS).findOne({ _id: email });
+      if (exists) return sendJson(res, 409, { error: 'An account with that email already exists' });
+      const { salt, hash } = hashPassword(password);
+      await db.collection(USERS).insertOne({ _id: email, name: (body.name || '').trim() || email, salt, hash, createdAt: new Date().toISOString() });
+      const token = await startSession(db, email);
+      return sendJson(res, 200, { token, user: { email, name: (body.name || '').trim() || email } });
+    } catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
+
+  // POST /api/login — { email, password } → { token, user }
+  if (urlPath === '/api/login' && req.method === 'POST') {
+    try {
+      const body = await readJson(req); if (!body) return sendJson(res, 400, { error: 'Invalid JSON' });
+      const email = normEmail(body.email), password = String(body.password || '');
+      const db = await getDb();
+      const u = await db.collection(USERS).findOne({ _id: email });
+      if (!u || !verifyPassword(password, u.salt, u.hash)) return sendJson(res, 401, { error: 'Wrong email or password' });
+      const token = await startSession(db, email);
+      return sendJson(res, 200, { token, user: publicUser(u) });
+    } catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
+
+  // POST /api/logout — invalidate the current token
+  if (urlPath === '/api/logout' && req.method === 'POST') {
+    try { const db = await getDb(); const token = bearer(req); if (token) await db.collection(SESSIONS).deleteOne({ _id: token }); return sendJson(res, 200, { ok: true }); }
+    catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
+
+  // GET /api/me — current user from token
+  if (urlPath === '/api/me' && req.method === 'GET') {
+    try { const u = await authUser(req); if (!u) return sendJson(res, 401, { error: 'Not signed in' }); return sendJson(res, 200, { user: publicUser(u) }); }
+    catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
+
+  // Everything below requires authentication.
+  let me;
+  try { me = await authUser(req); } catch (e) { return sendJson(res, 503, { error: e.message }); }
+  if (!me) return sendJson(res, 401, { error: 'Sign in required' });
 
   // GET /api/state — load the saved workspace state (null if none yet)
   if (urlPath === '/api/state' && req.method === 'GET') {
@@ -81,7 +163,7 @@ async function handleApi(req, res, urlPath) {
       const updatedAt = new Date().toISOString();
       await db.collection(STATE_COLLECTION).updateOne(
         { _id: STATE_ID },
-        { $set: { state, updatedAt } },
+        { $set: { state, updatedAt, updatedBy: me._id } },
         { upsert: true }
       );
       return sendJson(res, 200, { ok: true, updatedAt });
@@ -108,7 +190,7 @@ const TYPES = {
   '.ico': 'image/x-icon',
 };
 
-http.createServer((req, res) => {
+function requestHandler(req, res) {
   let urlPath = decodeURIComponent(req.url.split('?')[0]);
 
   if (urlPath.startsWith('/api/')) {
@@ -137,7 +219,17 @@ http.createServer((req, res) => {
     });
     res.end(data);
   });
-}).listen(PORT, () => {
-  console.log(`Plaky running at http://localhost:${PORT}`);
-  console.log(MONGO_URI ? `MongoDB: ${DB_NAME} (state API enabled)` : 'MongoDB: not configured (state API disabled)');
-});
+}
+
+// Export the request handler (callable) so a host can also use it as a handler if needed.
+module.exports = requestHandler;
+module.exports.handleApi = handleApi;
+module.exports.requestHandler = requestHandler;
+
+// Only start a long-running HTTP server when run directly (`node server.js`).
+if (require.main === module) {
+  http.createServer(requestHandler).listen(PORT, () => {
+    console.log(`Plaky running at http://localhost:${PORT}`);
+    console.log(MONGO_URI ? `MongoDB: ${DB_NAME} (state API enabled)` : 'MongoDB: not configured (state API disabled)');
+  });
+}

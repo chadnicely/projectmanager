@@ -1,3 +1,12 @@
 node_modules/
 config.local.js
+HOST.md
 _mongotest.js
+_createuser.js
+.vercel-token
+.vercel/
+.env
+.env.local
+
+.vercel
+.env*

@@ -1,0 +1,12 @@
+.git
+node_modules
+.vercel-token
+.vercel
+config.local.js
+.env
+.env.local
+_createuser.js
+_mongotest.js
+HOST.md
+UPDATES.md
+"Start Project Center.bat"
