@@ -145,7 +145,8 @@ async function handleApi(req, res, urlPath) {
       const email = normEmail(body.email), password = String(body.password || '');
       const db = await getDb();
       const u = await db.collection(USERS).findOne({ _id: email });
-      if (!u || !verifyPassword(password, u.salt, u.hash)) return sendJson(res, 401, { error: 'Wrong email or password' });
+      if (!u || !u.salt || !u.hash) return sendJson(res, 401, { error: 'No password is set for this account yet.' });
+      if (!verifyPassword(password, u.salt, u.hash)) return sendJson(res, 401, { error: 'Wrong email or password' });
       // SOB controls access. The webhooks keep u.sobStatus fresh, so gate on that (fast, no per-login SOB call).
       if (u.sobStatus && String(u.sobStatus).toLowerCase() !== 'active') {
         return sendJson(res, 403, { error: 'Your account is ' + u.sobStatus + ' in SOB.' });
