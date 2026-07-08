@@ -3583,7 +3583,7 @@ Chad,chad@cen.com,Austin"></textarea>
     try{ const r=await fetch('/api/tokens',{headers:authHeaders(),cache:'no-store'}); if(!r.ok) return []; const j=await r.json(); return j.tokens||[]; }catch(_){ return []; }
   }
   function mcpSnippet(){
-    return JSON.stringify({ mcpServers:{ base:{ command:'node', args:['<path-to>/mcp/server.js'], env:{ BASE_URL: location.origin, BASE_TOKEN:'<paste your token here>' } } } }, null, 2);
+    return JSON.stringify({ mcpServers:{ base:{ type:'http', url: location.origin+'/mcp', headers:{ Authorization:'Bearer <paste your token here>' } } } }, null, 2);
   }
   async function openConnect(){
     let ov=document.getElementById('connect-overlay');
