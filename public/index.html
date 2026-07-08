@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cadence — My Workspace</title>
+<title>Base — My Workspace</title>
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#0b0f13" />
 <link rel="apple-touch-icon" href="icon-192.png" />
@@ -115,6 +115,12 @@
   .space-pill .sq{width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#6b6b8a,#45435c);display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff}
   .space-pill .nm{font-weight:600;flex:1}
   .space-pill .cv{color:var(--text-faint)}
+  /* Workspace list (sidebar) */
+  .ws-head{display:flex;align-items:center;justify-content:space-between;margin:12px 12px 4px;color:var(--text-faint);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+  .ws-head .add-btn{flex:0 0 auto;height:24px;width:24px;display:grid;place-items:center}
+  .spaces-list{margin-bottom:8px}
+  .ws-row .ws-sq{width:22px;height:22px;border-radius:6px;display:inline-grid;place-items:center;font-size:10px;font-weight:700;color:#fff;flex:0 0 auto}
+  .ws-row .ws-del{cursor:pointer}
   .ws-inline{flex:1;min-width:0;background:var(--bg);border:1px solid var(--blue);border-radius:6px;color:var(--text);padding:4px 8px;font-size:14px;font-weight:600;font-family:inherit;outline:none}
   .search-row{display:flex;gap:8px;padding:0 10px 8px}
   .search-box{flex:1;display:flex;align-items:center;gap:8px;background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:7px 10px;color:var(--text-faint)}
@@ -901,6 +907,13 @@
   .main.spaces-mode .spaces-screen{display:flex}
   .main.team-mode > *:not(.team-screen){display:none}
   .main.team-mode .team-screen{display:flex}
+  /* Hide the boards onboarding card in every non-boards app (its #id rule would otherwise
+     out-specify the mode hide rules and leak the "set up your workspace" card through). */
+  .main.base-mode #board-empty,.main.time-mode #board-empty,.main.spaces-mode #board-empty,.main.team-mode #board-empty{display:none !important}
+  /* Team view with only you → show just the "add your first member" onboarding, centered. */
+  .team-screen.team-onboarding{align-items:center;justify-content:center}
+  .team-screen.team-onboarding > *:not(#team-members){display:none}
+  .team-screen.team-onboarding #team-members{width:100%;max-width:520px}
   .team-sec-title{color:var(--text-dim);font-weight:700;font-size:13px;text-transform:uppercase;letter-spacing:.4px;margin:22px 0 12px;display:flex;align-items:center;gap:10px}
   .team-sec-title .cnt{background:var(--panel-3);border-radius:10px;padding:1px 9px;font-size:12px;color:var(--text-faint);font-weight:600}
   .new-team-link{color:var(--blue);cursor:pointer;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0}
@@ -1077,7 +1090,7 @@
 <body>
 <div id="auth-overlay" class="auth-overlay">
   <div class="auth-card">
-    <div class="auth-brand"><span class="mark">C</span> Cadence</div>
+    <div class="auth-brand"><span class="mark">B</span> Base</div>
     <div class="auth-title" id="auth-title">Sign in to your project center</div>
     <div class="auth-err" id="auth-err"></div>
     <label class="auth-lbl">Email</label>
@@ -1098,14 +1111,11 @@
   <div class="topbar">
     <div class="grid-icon" title="Switch app" onclick="openAppLauncher(this)"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="top-ic" id="nav-toggle" title="Collapse / expand menu" onclick="toggleNav()">☰</div>
-    <div class="logo"><span class="mark">C</span><span>Cadence</span></div>
+    <div class="logo"><span class="mark">B</span><span>Base</span></div>
     <span class="workspace" id="workspace-label">My Workspace</span>
     <span class="dots" id="settings-btn" title="Settings" onclick="openSettings(this)">⚙</span>
     <div class="spacer"></div>
-    <span id="sync-dot" data-state="idle" title="Cloud sync"></span>
-    <div class="top-ic mob-hide" title="Invite members" onclick="openInvite()">👤⁺</div>
-    <div class="top-ic mob-hide">🔔</div>
-    <div class="top-ic mob-hide">?</div>
+    <span id="sync-dot" data-state="idle" title="Cloud sync" style="display:none"></span>
     <div class="top-ic" id="theme-btn" title="Toggle light / dark" onclick="toggleTheme()">🌙</div>
     <div class="avatar" id="avatar-btn" title="Profile" onclick="openProfile(this)">🧔</div>
   </div>
@@ -1115,12 +1125,11 @@
     <aside class="sidebar">
       <div class="sb-close" onclick="closeMobileNav()" title="Close menu">✕</div>
       <div id="sb-boards">
-        <div class="space-selector" style="margin-top:12px">
-          <div class="space-pill" id="space-pill" title="Switch workspace" onclick="openSpaceMenu(this)">
-            <span class="sq" id="space-sq">MS</span><span class="nm" id="space-name">Main space</span><span class="cv">⌄</span>
-          </div>
-          <button class="add-btn" title="Add / rename / delete workspace" onclick="openSpacePlusMenu(this)">＋</button>
+        <div class="ws-head">
+          <span class="ws-title">Workspaces</span>
+          <button class="add-btn" title="New workspace" onclick="addSpace()">＋</button>
         </div>
+        <div class="spaces-list" id="spaces-list"></div>
         <div class="sb-new-board" onclick="addBoard()">＋ New board</div>
         <div class="boards" id="boards"></div>
       </div>
@@ -2052,14 +2061,53 @@ Chad,chad@cen.com,Austin"></textarea>
   const boardsEl = document.getElementById('boards');
   let boardFilter = '';
   let dragBoardIdx = null;   // sidebar board drag-reorder
+  let dragSpaceIdx = null;   // sidebar workspace drag-reorder
   function activeSpaceObj(){ return state.spaces.find(s=>s.id===state.activeSpace) || state.spaces[0]; }
+  // Sidebar list of workspaces: click to switch, ✎ (or double-click) to rename inline, drag to reorder.
+  function renderWorkspaceList(){
+    const wsEl=document.getElementById('spaces-list'); if(!wsEl) return;
+    wsEl.innerHTML='';
+    state.spaces.filter(isVisible).forEach(wsp=>{
+      const realIdx=state.spaces.indexOf(wsp);
+      const row=document.createElement('div');
+      row.className='board ws-row'+(wsp.id===state.activeSpace?' active':'');
+      row.innerHTML=`<span class="ws-sq" style="background:${wsp.color}">${initials(wsp.name)}</span><span class="item-name" style="flex:1">${esc(wsp.name)}</span><span class="board-edit" title="Rename workspace">✎</span><span class="board-menu ws-del" title="Delete workspace">🗑</span>`;
+      row.addEventListener('click',()=>switchSpace(wsp.id));
+      const nm=row.querySelector('.item-name');
+      nm.addEventListener('dblclick',e=>{ e.stopPropagation(); renameSpaceInline(wsp.id, nm); });
+      row.querySelector('.board-edit').addEventListener('click',e=>{ e.stopPropagation(); renameSpaceInline(wsp.id, nm); });
+      row.querySelector('.ws-del').addEventListener('click',e=>{ e.stopPropagation(); deleteSpace(wsp.id); });
+      row.setAttribute('draggable','true');
+      row.addEventListener('dragstart',e=>{ dragSpaceIdx=realIdx; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain','space'); setTimeout(()=>row.classList.add('sb-dragging'),0); });
+      row.addEventListener('dragend',()=>{ dragSpaceIdx=null; wsEl.querySelectorAll('.ws-row').forEach(x=>x.classList.remove('drop-above','drop-below','sb-dragging')); });
+      row.addEventListener('dragover',e=>{ if(dragSpaceIdx==null) return; e.preventDefault(); const r=row.getBoundingClientRect(); const before=e.clientY<r.top+r.height/2; row.classList.toggle('drop-above',before); row.classList.toggle('drop-below',!before); });
+      row.addEventListener('dragleave',()=>row.classList.remove('drop-above','drop-below'));
+      row.addEventListener('drop',e=>{ if(dragSpaceIdx==null) return; e.preventDefault(); row.classList.remove('drop-above','drop-below'); const r=row.getBoundingClientRect(); const before=e.clientY<r.top+r.height/2; reorderSpaces(dragSpaceIdx, realIdx, before); });
+      wsEl.appendChild(row);
+    });
+  }
+  function reorderSpaces(fromIdx, toIdx, before){
+    if(fromIdx===toIdx) return;
+    const moved=state.spaces[fromIdx], target=state.spaces[toIdx];
+    if(!moved || !target) return;
+    state.spaces.splice(fromIdx,1);
+    const ti=state.spaces.indexOf(target);
+    state.spaces.splice(before?ti:ti+1, 0, moved);
+    save(); renderAll();
+  }
+  function renameSpaceInline(id, nameEl){
+    const sp=state.spaces.find(s=>s.id===id); if(!sp || !nameEl) return;
+    const inp=document.createElement('input'); inp.className='ws-inline'; inp.value=sp.name;
+    nameEl.replaceWith(inp); inp.focus(); inp.select();
+    let done=false;
+    const commit=save_=>{ if(done) return; done=true; if(save_) sp.name=inp.value.trim()||sp.name; save(); renderAll(); if(mainEl.classList.contains('spaces-mode')) renderSpaces(); };
+    inp.addEventListener('mousedown',e=>e.stopPropagation());
+    inp.addEventListener('click',e=>e.stopPropagation());
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();commit(true);} else if(e.key==='Escape'){commit(false);} });
+    inp.addEventListener('blur',()=>commit(true));
+  }
   function renderSidebar(){
-    // space pill reflects the active space
-    const sp = activeSpaceObj();
-    document.getElementById('space-name').textContent = sp.name;
-    const sq = document.getElementById('space-sq');
-    sq.textContent = initials(sp.name); sq.style.background = sp.color;
-
+    renderWorkspaceList();
     boardsEl.innerHTML='';
     const f = boardFilter.trim().toLowerCase();
     let shown=0;
@@ -2266,7 +2314,8 @@ Chad,chad@cen.com,Austin"></textarea>
     state.activeSpace = id;                 // switch to the new (empty) workspace
     state.wsNamed = true;                   // making workspaces manually = past first-run onboarding
     closeSpaces(); save(); renderAll();
-    editWorkspaceInline();                  // name it inline (no popup)
+    const nameEl=document.querySelector('#spaces-list .ws-row.active .item-name');
+    if(nameEl) renameSpaceInline(id, nameEl);   // name it inline in the list (no popup)
   }
   function renameSpace(id){
     if(id && id!==state.activeSpace){ state.activeSpace=id; renderAll(); }
@@ -3515,6 +3564,22 @@ Chad,chad@cen.com,Austin"></textarea>
     const ppl=state.people.filter(isVisible);
     document.getElementById('team-count').textContent=ppl.length;
     mem.innerHTML='';
+    // Only you so far → show ONLY the "add your first team member" onboarding (no header/list clutter).
+    const onlyYou = ppl.filter(p=>!p.me).length===0;
+    document.getElementById('team-screen').classList.toggle('team-onboarding', onlyYou);
+    if(onlyYou){
+      const ob=document.createElement('div'); ob.className='team-onboard';
+      ob.innerHTML=emptyState({
+        icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+        title:'Add your first team member',
+        text:'Invite the people who can log in and collaborate in this workspace. They’ll show up here and can be assigned to tasks.',
+        actions:[{id:'add',label:'＋ Add your first team member'}]
+      });
+      ob.querySelector('[data-act="add"]').addEventListener('click',()=>openMemberForm());
+      mem.appendChild(ob);
+      document.getElementById('team-teams').innerHTML='';
+      return;
+    }
     ppl.forEach(p=>{
       const row=document.createElement('div'); row.className='member-row';
       const sub=[p.title?esc(p.title):'', p.email?esc(p.email):''].filter(Boolean).join(' · ');
@@ -3531,18 +3596,6 @@ Chad,chad@cen.com,Austin"></textarea>
       const del=row.querySelector('.m-del'); if(del) del.addEventListener('click',()=>removeMember(p.id));
       mem.appendChild(row);
     });
-    // Onboarding: no teammates yet (just you) → prompt to add the first one.
-    if(ppl.filter(p=>!p.me).length===0){
-      const ob=document.createElement('div'); ob.className='team-onboard';
-      ob.innerHTML=emptyState({
-        icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
-        title:'Add your first team member',
-        text:'Invite the people who can log in and collaborate in this workspace. They’ll show up here and can be assigned to tasks.',
-        actions:[{id:'add',label:'＋ Add your first team member'}]
-      });
-      ob.querySelector('[data-act="add"]').addEventListener('click',()=>openMemberForm());
-      mem.appendChild(ob);
-    }
     const teamsEl=document.getElementById('team-teams'); teamsEl.innerHTML='';
     state.teams.forEach(t=>{
       const members=(t.members||[]).map(id=>personById(id)).filter(Boolean);
