@@ -436,6 +436,10 @@
     /* team chip ("👥 Everyone at CEN Innovations") — one compact line, truncate not wrap */
     .board-members{flex:0 0 auto}
     .bm-team{display:inline-block;max-width:118px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding:3px 9px;line-height:16px;vertical-align:middle}
+    /* Tapping a bar should OPEN the popup — not toggle the select tick or fire a count badge.
+       Hide the selection checkbox and let badge taps fall through to the row's open handler. */
+    .row-check{display:none}
+    .name-cell .qbadge{pointer-events:none}
     .dtitle,.dtitle-row .dtitle{font-size:18px}
     .dtitle-row{flex-wrap:wrap}
     .dcols{overflow-x:hidden}
