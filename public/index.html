@@ -99,6 +99,7 @@
 
   /* ===== Sidebar ===== */
   .sidebar{background:var(--sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;min-height:0;overflow:hidden;white-space:nowrap}
+  .sb-close{display:none}   /* mobile-only drawer close button (see mobile media query) */
   .nav{padding:10px 10px 4px}
   .nav-item{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:8px;color:var(--text-dim);cursor:pointer;font-weight:500}
   .nav-item:hover{background:var(--panel-3);color:var(--text)}
@@ -406,6 +407,8 @@
     .body,body.nav-collapsed .body{grid-template-columns:1fr}
     .sidebar{position:fixed;top:52px;left:0;bottom:0;width:min(85vw,300px);z-index:10010;transform:translateX(-100%);transition:transform .22s ease;box-shadow:6px 0 28px rgba(0,0,0,.45);display:flex!important}
     body.nav-open .sidebar{transform:translateX(0)}
+    .sb-close{display:grid;place-items:center;position:absolute;top:10px;right:10px;width:32px;height:32px;border-radius:8px;background:var(--panel-3);color:var(--text-dim);font-size:15px;cursor:pointer;z-index:5}
+    #sb-boards{padding-top:42px}   /* room for the close button above the workspace row */
     body.nav-open::before{content:'';position:fixed;left:0;right:0;top:52px;bottom:0;background:rgba(0,0,0,.5);z-index:10009}
     /* Fixed app viewport on mobile: the top bar AND the board title/tabs stay pinned.
        Rows scroll UP/DOWN (a vertical scrollbar on the content), and the table scrolls
@@ -970,7 +973,7 @@
   /* Mobile: icon popovers/menus open centered as a modal with a dimmed backdrop (after the base
      rule so these win). positionAt() sets left/top:50% + translate to center it. */
   @media (max-width:760px){
-    .popover{position:fixed;min-width:0;width:min(340px,92vw);max-width:92vw;max-height:80vh}
+    .popover{position:fixed;min-width:0;width:min(340px,92vw);max-width:92vw;max-height:80vh;z-index:10030}
     .popover.show{box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 100vmax rgba(0,0,0,.45)}
   }
   .pop-box{display:flex;flex-wrap:wrap;gap:2px;border:1px solid var(--blue);border-radius:8px;padding:6px;margin-bottom:8px;min-height:38px;align-items:center}
@@ -1110,6 +1113,7 @@
   <div class="body">
     <!-- Sidebar -->
     <aside class="sidebar">
+      <div class="sb-close" onclick="closeMobileNav()" title="Close menu">✕</div>
       <div id="sb-boards">
         <div class="space-selector" style="margin-top:12px">
           <div class="space-pill" id="space-pill" title="Switch workspace" onclick="openSpaceMenu(this)">
