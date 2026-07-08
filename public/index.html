@@ -2997,7 +2997,7 @@ Chad,chad@cen.com,Austin"></textarea>
     const rect=anchor.getBoundingClientRect();
     const app = mainEl.classList.contains('base-mode') ? 'base' : mainEl.classList.contains('time-mode') ? 'time' : 'boards';
     popEl.innerHTML=`<div class="pop-section">My Workspace apps</div><div class="app-grid">`+
-      `<div class="app-tile ${app==='boards'?'active':''}" id="app-boards"><span class="app-ic" style="background:linear-gradient(135deg,#12c2ae,#0e9e90)">C</span><span class="app-nm">Boards</span></div>`+
+      `<div class="app-tile ${app==='boards'?'active':''}" id="app-boards"><span class="app-ic" style="background:linear-gradient(135deg,#12c2ae,#0e9e90)">◫</span><span class="app-nm">Boards</span></div>`+
       `<div class="app-tile ${app==='base'?'active':''}" id="app-base"><span class="app-ic" style="background:linear-gradient(135deg,#f0a020,#e2445c)">▦</span><span class="app-nm">Base</span></div>`+
       `<div class="app-tile ${app==='time'?'active':''}" id="app-time"><span class="app-ic" style="background:linear-gradient(135deg,#3b5bdb,#2f9be0)">◷</span><span class="app-nm">Time</span></div>`+
       `<div class="app-tile" id="app-team"><span class="app-ic" style="background:linear-gradient(135deg,#a23bc7,#7048e8)">👥</span><span class="app-nm">Team</span></div>`+
