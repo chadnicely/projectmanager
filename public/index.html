@@ -421,6 +421,9 @@
     .title-row .title-edit,.title-row .header-search,.title-row .lastseen,.title-row .arch-toggle,.title-row .title-ic:not([onclick*="openBoardMenu"]){display:none}
     /* keep horizontal scrolling INSIDE the data areas — never let it chain to the page */
     .table-wrap,.board-wrap,.bg-wrap{overscroll-behavior-x:contain}
+    /* inputs must be >=16px or iOS auto-zooms on focus and the page stays zoomed after closing.
+       (targets form fields + the description editor, NOT the 13px Base spreadsheet cells) */
+    input,textarea,select,.ddesc{font-size:16px!important}
     /* table & base grid: horizontal-only; their height is natural so .main scrolls the rows */
     .table-wrap{flex:none;height:auto;overflow-x:auto;overflow-y:visible;padding:8px 8px 16px;-webkit-overflow-scrolling:touch}
     .bg-wrap{flex:none;height:auto;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
