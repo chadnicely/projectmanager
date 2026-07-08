@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cadence — CEN Innovations</title>
+<title>Cadence — My Workspace</title>
 <link rel="manifest" href="manifest.webmanifest" />
 <meta name="theme-color" content="#0b0f13" />
 <link rel="apple-touch-icon" href="icon-192.png" />
@@ -448,7 +448,7 @@
     .dfoot .del-btn,.dfoot .save-btn{height:46px;padding:0 20px}
     /* smaller titles on mobile + keep everything inside the sheet (no sideways shift) */
     .board-title{font-size:18px}
-    /* team chip ("👥 Everyone at CEN Innovations") — one compact line, truncate not wrap */
+    /* team chip ("👥 Everyone at My Workspace") — one compact line, truncate not wrap */
     .board-members{flex:0 0 auto}
     .bm-team{display:inline-block;max-width:118px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding:3px 9px;line-height:16px;vertical-align:middle}
     /* Tapping a bar should OPEN the popup — not toggle the select tick or fire a count badge.
@@ -1099,7 +1099,7 @@
     <div class="grid-icon" title="Switch app" onclick="openAppLauncher(this)"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="top-ic" id="nav-toggle" title="Collapse / expand menu" onclick="toggleNav()">☰</div>
     <div class="logo"><span class="mark">C</span><span>Cadence</span></div>
-    <span class="workspace" id="workspace-label">CEN Innovations</span>
+    <span class="workspace" id="workspace-label">My Workspace</span>
     <span class="dots" id="settings-btn" title="Settings" onclick="openSettings(this)">⚙</span>
     <div class="spacer"></div>
     <span id="sync-dot" data-state="idle" title="Cloud sync"></span>
@@ -1131,7 +1131,7 @@
     <main class="main">
       <div class="main-head">
         <div class="title-row">
-          <h1 class="board-title" id="board-title">Mintbird Partner</h1>
+          <h1 class="board-title" id="board-title"></h1>
           <span class="title-edit" title="Rename board" onclick="if(typeof currentBoard==='function'&&currentBoard())renameBoard()">✎</span>
           <span class="title-ic">☆</span>
           <span class="title-ic">ⓘ</span>
@@ -1175,7 +1175,7 @@
           <div class="spacer"></div>
           <button class="new-space-btn" onclick="addSpace()">＋ New workspace</button>
         </div>
-        <div class="sub" style="color:var(--text-faint);font-size:14px">All your workspaces in <strong>CEN Innovations</strong></div>
+        <div class="sub" style="color:var(--text-faint);font-size:14px">All your workspaces in <strong>My Workspace</strong></div>
         <div class="spaces-grid" id="spaces-grid"></div>
       </div>
 
@@ -1186,7 +1186,7 @@
           <div class="spacer"></div>
           <button class="new-space-btn" onclick="openMemberForm()">＋ Add member</button>
         </div>
-        <div class="sub" style="color:var(--text-faint);font-size:14px">People who can log in to <strong>CEN Innovations</strong></div>
+        <div class="sub" style="color:var(--text-faint);font-size:14px">People who can log in to <strong>My Workspace</strong></div>
         <div class="team-sec-title">Members <span id="team-count" class="cnt"></span></div>
         <div id="team-members"></div>
         <div class="team-sec-title" style="margin-top:26px">Teams <span class="new-team-link" onclick="addTeam()">＋ New team</span></div>
@@ -1602,7 +1602,7 @@ Chad,chad@cen.com,Austin"></textarea>
       {id:nid++, task:'Product Roadmap — onboarding flow', start:daysAgoMs(0,3), end:daysAgoMs(0,3)+45*60000, seconds:45*60, demo:true},
       {id:nid++, task:'Campaigns — Q3 launch planning', start:daysAgoMs(0,1.5), end:daysAgoMs(0,0.5), seconds:60*60, demo:true},
     ];
-    return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp1', spaceSeq:spSeq, view:'table', demo:false, demoDecided:false, sampleFlagged:true,
+    return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp2', spaceSeq:spSeq, view:'table', demo:true, demoDecided:false, sampleFlagged:true,
             people:SEED_PEOPLE.map(p=>({...p})), teams:SEED_TEAMS.map(t=>({...t})), timeEntries, timer:null, base:demoBase()};
   }
   const defaultState = demoSeed;
@@ -1687,13 +1687,7 @@ Chad,chad@cen.com,Austin"></textarea>
     state.labelColorsV2=true;
   }
   state.base.tables.forEach(t=>{
-    const bareDefault = t.views && t.views.length===1 && t.views[0].name==='Grid view';
-    if(!t.views || !t.views.length || (t.name==='Buyers' && bareDefault)){
-      t.views = t.name==='Buyers'
-        ? [{id:'v1',name:'2022 - 2020'},{id:'v2',name:'MB Product Order (2022 - 2020)'},{id:'v3',name:'Mintbird Export (2022 - 2020)'},{id:'v4',name:'filtered'},{id:'v5',name:'SYNC VIEW'}]
-        : [{id:'v1',name:'Grid view'}];
-      t.activeView=0;
-    }
+    if(!t.views || !t.views.length){ t.views=[{id:'v1',name:'Grid view'}]; t.activeView=0; }
     if(t.activeView==null) t.activeView=0;
   });
   // Seed demo per-staff time stats (Time Doctor style)
@@ -1937,7 +1931,7 @@ Chad,chad@cen.com,Austin"></textarea>
         `<div class="empty-ic">${ONB.space}</div>`+
         `<div class="empty-title">Welcome 👋 Let’s set up your workspace</div>`+
         `<div class="empty-text">A workspace is your home base — every board you build lives inside it. Give it a name (your company or team works great).</div>`+
-        `<div class="ws-setup"><input id="ws-name" class="ws-input" placeholder="e.g. Nicely Media" value="${sp.name==='Main space'?'':esc(sp.name)}"><button class="empty-cta" id="ws-continue">Continue →</button></div>`+
+        `<div class="ws-setup"><input id="ws-name" class="ws-input" placeholder="e.g. Acme Inc" value="${sp.name==='Main space'?'':esc(sp.name)}"><button class="empty-cta" id="ws-continue">Continue →</button></div>`+
         `</div>`;
       const inp=el.querySelector('#ws-name');
       const go=()=>{ const nm=inp.value.trim(); if(nm) sp.name=nm; state.wsNamed=true; save(); renderAll(); };
@@ -2915,14 +2909,14 @@ Chad,chad@cen.com,Austin"></textarea>
     mainEl.classList.remove('base-mode','time-mode');
     document.body.classList.toggle('in-base', name==='base');
     const wl=document.getElementById('workspace-label');
-    if(wl) wl.textContent = name==='base' ? 'Base' : name==='time' ? 'Time' : 'CEN Innovations';
+    if(wl) wl.textContent = name==='base' ? 'Base' : name==='time' ? 'Time' : 'My Workspace';
     if(name==='base'){ closeSpaces(); closeTeam(); mainEl.classList.add('base-mode'); renderBase(); }
     else if(name==='time'){ closeSpaces(); closeTeam(); mainEl.classList.add('time-mode'); renderTime(); }
   }
   function openAppLauncher(anchor){
     const rect=anchor.getBoundingClientRect();
     const app = mainEl.classList.contains('base-mode') ? 'base' : mainEl.classList.contains('time-mode') ? 'time' : 'boards';
-    popEl.innerHTML=`<div class="pop-section">CEN Innovations apps</div><div class="app-grid">`+
+    popEl.innerHTML=`<div class="pop-section">My Workspace apps</div><div class="app-grid">`+
       `<div class="app-tile ${app==='boards'?'active':''}" id="app-boards"><span class="app-ic" style="background:linear-gradient(135deg,#12c2ae,#0e9e90)">C</span><span class="app-nm">Boards</span></div>`+
       `<div class="app-tile ${app==='base'?'active':''}" id="app-base"><span class="app-ic" style="background:linear-gradient(135deg,#f0a020,#e2445c)">▦</span><span class="app-nm">Base</span></div>`+
       `<div class="app-tile ${app==='time'?'active':''}" id="app-time"><span class="app-ic" style="background:linear-gradient(135deg,#3b5bdb,#2f9be0)">◷</span><span class="app-nm">Time</span></div>`+
@@ -3456,7 +3450,7 @@ Chad,chad@cen.com,Austin"></textarea>
     showPopover(rect);
   }
   async function resetWorkspace(){
-    const ok=await confirmBox('Start fresh?','This restores the full demo and clears everything else. Then turn Demo off (in your profile) to start building with a blank workspace.','Start fresh');
+    const ok=await confirmBox('Start fresh?','This replaces your workspace with the fresh sample data. Turn Demo off anytime in Settings to hide the samples and see only your own work.','Start fresh');
     if(!ok) return;
     const theme=state.theme, nav=state.navCollapsed;
     state=demoSeed();
