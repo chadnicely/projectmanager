@@ -1380,146 +1380,227 @@ Chad,chad@cen.com,Austin"></textarea>
   // Workspace directory (people + teams) — persisted so a real backend can replace it later
   const SEED_PEOPLE = [
     {id:'u1', name:'You', me:true, color:'#c9743a'},   // display name is synced from the signed-in account (see ensureMePerson)
-    {id:'u2', name:'Adarsha Shrestha',     color:'#40b869', demo:true},
-    {id:'u3', name:'Gaurav Subedi',        color:'#7a8899', demo:true},
-    {id:'u4', name:'Ishworconnects',       color:'#2f9be0', demo:true},
-    {id:'u5', name:'Khushal Vekariya',     color:'#e2445c', demo:true},
-    {id:'u6', name:'M A Kafi',             color:'#12b886', demo:true},
-    {id:'u7', name:'Pranay Rajopadhyaya',  color:'#a23bc7', demo:true},
+    {id:'u2', name:'Alex Morgan',   color:'#6161ff', demo:true},
+    {id:'u3', name:'Priya Sharma',  color:'#00c875', demo:true},
+    {id:'u4', name:'Jordan Lee',    color:'#e2445c', demo:true},
+    {id:'u5', name:'Sam Rivera',    color:'#fdab3d', demo:true},
+    {id:'u6', name:'Taylor Chen',   color:'#a25ddc', demo:true},
+    {id:'u7', name:'Diego Ramos',   color:'#2f9be0', demo:true},
   ];
   const SEED_TEAMS = [{id:'t1', name:'Everyone'}];
   const GROUP_COLORS=['#a23bc7','#2f9be0','#e0820b','#40b869','#e2445c','#3b5bdb','#12b886','#eaa32a'];
   const DEFAULT_GROUP_COLOR='#868e9c';   // neutral grey — groups have no color until you pick one
   const SPACE_COLORS=['#6b6b8a','#3d7bfd','#a23bc7','#df7d0b','#00c875','#e2445c','#579bfc','#037f4c'];
-  // ---- Demo dataset: space -> board -> group -> [item names] ----
-  const DEMO = {
-    'AI': {
-      'AIBot Studio': {
-        'Roadmap': ['Model routing v2','Prompt library','Token-cost dashboard','Streaming latency fix','Function calling'],
-        'In Progress': ['Fine-tune eval harness','Agent memory store','Guardrails filter'],
-        'Shipped': ['Vector DB migration','Rate limiting','Usage analytics'],
-      },
-      'Mintify Pro': {
-        'This Week': ['Onboarding flow','Stripe webhooks','Usage metering'],
-        'Backlog': ['Team seats','SSO / SAML','Audit log','Webhook retries'],
-      },
-      'QuizForma': {
-        'Priorities': ['AI question generator','Answer grading','Export to PDF'],
-        'Bugs': ['Timer resets on refresh','Image upload fails'],
-      },
-      'PubBot': {
-        'Content': ['Auto-summarize feed','Schedule posts','Tone presets'],
-        'Ideas': ['Reddit source','LinkedIn cross-post'],
-      },
-    },
-    'Software': {
-      'Global Control Center': {
-        'Sprint 12': ['Tenant switcher','Role permissions','Billing sync','Dark mode'],
-        'In Review': ['Audit trail','Session timeout'],
-        'Done': ['Login rate limit','2FA enrollment','Password reset'],
-      },
-      'GC Admin': {
-        'Priorities': ['Impersonate user','Feature flags UI','Bulk export'],
-        'Backlog': ['Data retention policy','GDPR delete'],
-      },
-      'Calentri': {
-        'This Week': ['Recurring events','Timezone picker','iCal feed'],
-        'Bugs': ['DST off-by-one','Invite email bounces'],
-      },
-      'Poplinks': {
-        'Roadmap': ['Link analytics','Custom domains','QR codes'],
-        'Ideas': ['A/B redirect','UTM builder'],
-      },
-    },
-    'Marketing': {
-      'Mintbird Partner': {
-        'New Priorities': ['Adjust stats','Add net selection','Show next payment date','Update the terms','Revised partner layout'],
-        'In Cue': ['Top partners','Refund page copy'],
-        'Completed': ['Sales report','Move login higher','All leads dashboard'],
-      },
-      'Letterman': {
-        'Campaigns': ['July newsletter','Welcome sequence','Re-engagement blast'],
-        'Backlog': ['Segment by tag','Deliverability audit'],
-      },
-      'Contest Platform': {
-        'Launch': ['Landing page','Prize logic','Winner selection','Terms & rules'],
-        'Ideas': ['Referral bonus','Social share unlock'],
-      },
-      'Course Sprout': {
-        'This Week': ['Screens in Course Sprout','Video hosting','Progress tracking'],
-        'Done': ['Certificate generator','Quiz embed'],
-      },
-    },
-  };
+  // ---- Demo dataset (generic + realistic). Everything below is flagged `demo` and stays
+  //      hidden until Demo is switched on in Settings. Spaces → boards → groups → items. ----
+  // Lightweight inline cover "images" (SVG data-URIs — render offline, no external requests).
+  const svgCover = (a,b)=> 'data:image/svg+xml,'+encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='480' height='260'>"+
+    "<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='"+a+"'/>"+
+    "<stop offset='1' stop-color='"+b+"'/></linearGradient></defs><rect width='480' height='260' fill='url(#g)'/>"+
+    "<circle cx='388' cy='58' r='110' fill='#fff' opacity='.12'/><circle cx='70' cy='232' r='140' fill='#000' opacity='.07'/>"+
+    "<circle cx='210' cy='120' r='58' fill='#fff' opacity='.06'/></svg>").replace(/'/g,'%27');
+    // ^ encode single quotes too — they'd otherwise break the CSS url('…') wrapper the cover is used in.
+  const COVER = { indigo:svgCover('#6366f1','#8b5cf6'), sky:svgCover('#0ea5e9','#22d3ee'),
+    green:svgCover('#10b981','#34d399'), amber:svgCover('#f59e0b','#fbbf24'),
+    rose:svgCover('#f43f5e','#fb7185'), slate:svgCover('#475569','#64748b'), teal:svgCover('#0d9488','#2dd4bf') };
+  const shotFile = key => ({ name:key+'-preview.svg', type:'image/svg+xml', dataUrl: COVER[key]||COVER.slate });
+  // Named label palette (assigned per-board with fresh ids during seed)
+  const LABELS = [ {name:'Feature',color:'#40b869'}, {name:'Bug',color:'#e2445c'}, {name:'Design',color:'#a23bc7'},
+    {name:'Research',color:'#2f9be0'}, {name:'Urgent',color:'#f0a020'}, {name:'Docs',color:'#12b886'} ];
+
+  // Item spec keys: n name · s status · a assignees · d created(daysAgo) · l labels · c cover
+  //   ck checklist [[name,done]] · f files [[name,type]] · shots [coverKey] image attachments
+  //   cm comments [[author,agoDays,text]] · u urls · desc description
+  const SPACES_DEMO = [
+    { name:'Product', color:'#3d7bfd', boards:[
+      { name:'Product Roadmap', groups:[
+        { name:'This Quarter', items:[
+          {n:'Redesign the onboarding flow', s:'In Progress', a:['u2','u4'], d:3, l:['Design','Feature'], c:'indigo',
+            desc:'Cut signup from 5 steps to 3 and add a progress bar. Goal: +15% activation.',
+            ck:[['Audit current funnel',true],['New wireframes',true],['Build step 1',false],['Usability test',false]],
+            cm:[['Alex Morgan',2,'Wireframes are in Figma — took a first pass at the empty states.'],['You',1,'Looks great. Let’s ship step 1 this week.']],
+            u:['https://www.figma.com/file/onboarding-v2']},
+          {n:'Add dark mode across the app', s:'Next Up', a:['u6'], d:6, l:['Feature'], c:'slate',
+            ck:[['Design tokens',true],['Theme toggle',false],['QA all screens',false]]},
+          {n:'Usage analytics dashboard', s:'In Cue', a:['u3','u5'], d:8, l:['Feature','Research'], c:'sky',
+            f:[['metrics-spec.pdf','application/pdf']]},
+        ]},
+        { name:'In Progress', items:[
+          {n:'Improve search performance', s:'In Progress', a:['u4'], d:1, l:['Bug'],
+            desc:'Search takes ~900ms on large workspaces. Target under 200ms with an index.',
+            cm:[['Jordan Lee',0,'Added a compound index — down to 180ms locally.']]},
+          {n:'Bulk actions for tasks', s:'In Progress', a:['u2'], d:4, l:['Feature'], c:'green',
+            ck:[['Multi-select',true],['Move / delete',true],['Undo',false]]},
+          {n:'Keyboard shortcuts', s:'Next Up', a:['u6'], d:9, l:['Feature']},
+        ]},
+        { name:'Shipped', items:[
+          {n:'Realtime cloud sync', s:'Completed', a:['u4','u2'], d:14, l:['Feature'], c:'teal'},
+          {n:'CSV import for tables', s:'Completed', a:['u3'], d:20, l:['Feature']},
+          {n:'Fix timezone bug in due dates', s:'Approved', a:['u5'], d:25, l:['Bug']},
+        ]},
+      ]},
+      { name:'Website Redesign', groups:[
+        { name:'Design', items:[
+          {n:'New landing page hero', s:'In Progress', a:['u6'], d:2, l:['Design'], shots:['rose'],
+            cm:[['Taylor Chen',1,'Two directions attached — leaning bold.']]},
+          {n:'Pricing page layout', s:'Next Up', a:['u6','u2'], d:5, l:['Design'], c:'amber'},
+          {n:'Icon set refresh', s:'In Cue', a:['u6'], d:7, l:['Design']},
+        ]},
+        { name:'Development', items:[
+          {n:'Rebuild nav in the new system', s:'In Progress', a:['u4'], d:3, l:['Feature']},
+          {n:'Responsive breakpoints', s:'Next Up', a:['u5'], d:6, l:['Bug']},
+          {n:'Lighthouse score to 95+', s:'In Cue', a:['u4'], d:9, l:['Research'], f:[['audit.pdf','application/pdf']]},
+        ]},
+        { name:'QA', items:[
+          {n:'Cross-browser check', s:'Hold', a:['u3'], d:10, l:['Bug']},
+          {n:'Broken links sweep', s:'Approved', a:['u5'], d:12},
+        ]},
+      ]},
+    ]},
+    { name:'Marketing', color:'#a23bc7', boards:[
+      { name:'Content Calendar', groups:[
+        { name:'Ideas', items:[
+          {n:'“How we scaled to 10k users” post', s:'In Cue', a:['u3'], d:4, l:['Docs'], c:'indigo'},
+          {n:'Customer story: Northwind', s:'Next Up', a:['u3','u2'], d:7, l:['Docs']},
+          {n:'Webinar: onboarding best practices', s:'In Cue', a:['u2'], d:9, l:['Research']},
+        ]},
+        { name:'Writing', items:[
+          {n:'Draft the launch announcement', s:'In Progress', a:['u3'], d:1, l:['Docs'], c:'amber',
+            ck:[['Outline',true],['First draft',true],['Edit pass',false],['Add screenshots',false]],
+            cm:[['Priya Sharma',0,'Draft is ready for review in the doc.']], u:['https://docs.google.com/document/launch-post']},
+          {n:'SEO refresh: top 10 pages', s:'Next Up', a:['u3'], d:5, l:['Research']},
+        ]},
+        { name:'Published', items:[
+          {n:'Spring feature roundup', s:'Completed', a:['u3'], d:16, l:['Docs'], c:'green'},
+          {n:'Product comparison guide', s:'Completed', a:['u2'], d:22},
+        ]},
+      ]},
+      { name:'Campaigns', groups:[
+        { name:'Planning', items:[
+          {n:'Q3 product launch', s:'In Progress', a:['u2','u3','u5'], d:2, l:['Urgent','Feature'], c:'rose',
+            desc:'Coordinated launch across email, blog, social, and in-app.',
+            ck:[['Landing page',true],['Email sequence',false],['Press kit',false],['Social assets',false]]},
+          {n:'Referral program', s:'Next Up', a:['u5'], d:8, l:['Feature']},
+        ]},
+        { name:'Live', items:[
+          {n:'Summer email series', s:'In Progress', a:['u3'], d:3, l:['Docs'], f:[['email-1.pdf','application/pdf']]},
+          {n:'Retargeting ads', s:'In Cue', a:['u5'], d:6},
+        ]},
+        { name:'Wrapped', items:[
+          {n:'Spring webinar', s:'Completed', a:['u2'], d:18, cm:[['Alex Morgan',17,'320 registered, 190 showed. Recording is posted.']]},
+        ]},
+      ]},
+    ]},
+    { name:'Operations', color:'#00c875', boards:[
+      { name:'Hiring Pipeline', groups:[
+        { name:'Applied', items:[
+          {n:'Senior Frontend Engineer', s:'In Cue', a:['u4'], d:2, l:['Urgent'], c:'sky',
+            desc:'Backfill for the web team. Target start: next month.',
+            f:[['resume-a.pdf','application/pdf'],['resume-b.pdf','application/pdf']]},
+          {n:'Product Designer', s:'In Cue', a:['u6'], d:4, l:['Design']},
+        ]},
+        { name:'Interviewing', items:[
+          {n:'Backend Engineer — final round', s:'In Progress', a:['u4','u2'], d:1, l:['Urgent'],
+            ck:[['Phone screen',true],['Tech interview',true],['System design',true],['Team fit',false]],
+            cm:[['Jordan Lee',0,'Strong on system design. Scheduling team-fit for Thursday.']]},
+          {n:'Marketing Lead', s:'Next Up', a:['u3'], d:5},
+        ]},
+        { name:'Offer', items:[
+          {n:'DevOps Engineer', s:'Approved', a:['u2'], d:6, l:['Feature'], c:'green'},
+        ]},
+      ]},
+      { name:'Customer Support', groups:[
+        { name:'New', items:[
+          {n:'Billing: duplicate charge', s:'URGENT', a:['u5'], d:0, l:['Urgent','Bug'], c:'rose'},
+          {n:'Import stuck on large CSV', s:'In Cue', a:['u4'], d:1, l:['Bug']},
+        ]},
+        { name:'In Progress', items:[
+          {n:'Feature request: recurring tasks', s:'In Progress', a:['u2'], d:2, l:['Feature'],
+            cm:[['Sam Rivera',1,'Third request this week — flagging for the roadmap.']]},
+          {n:'SSO setup help', s:'In Progress', a:['u4'], d:3, l:['Docs']},
+        ]},
+        { name:'Resolved', items:[
+          {n:'Password reset emails', s:'Completed', a:['u5'], d:5, l:['Bug']},
+          {n:'Mobile layout glitch', s:'Approved', a:['u6'], d:8, l:['Bug']},
+        ]},
+      ]},
+    ]},
+  ];
   function daysAgo(n){ return new Date(Date.now()-n*86400000).toISOString(); }
   function daysAgoMs(days, hours){ return Date.now()-(days||0)*86400000-(hours||0)*3600000; }
   function demoBase(){
     let n=1;
     const F=(name,type)=>({id:'bf'+(n++),name,type});
-    const fields=[F('Customer ID','number'),F('First Name','text'),F('Last Name','text'),F('Email','email'),F('Phone','phone'),F('Address','text'),F('City','text'),F('State','text'),F('Zip Code','text')];
-    const [cid,fn,ln,em,ph,ad,ci,stt,zip]=fields.map(f=>f.id);
-    const rows=[
-      {[cid]:189625,[ci]:'Richmond',[stt]:'Texas',[zip]:'77407'},
-      {[cid]:82708,[ci]:'Farmingdale',[stt]:'New York',[zip]:'11735'},
-      {[cid]:121542,[ci]:'Toronto',[stt]:'Ontario',[zip]:'M1E2G3'},
-      {[cid]:117742,[ph]:'1',[stt]:'Pennsylvania',[zip]:'19047'},
-      {[cid]:122120,[ci]:'Basel',[stt]:'NULL',[zip]:'4058'},
-      {[cid]:12159,[ci]:'Mansfield',[stt]:'NULL',[zip]:'NG19 6LZ'},
-      {[cid]:142948,[ci]:'Alexandria',[stt]:'Virginia',[zip]:'22309'},
-      {[cid]:77499,[stt]:'Louisiana',[zip]:'71254'},
-      {[cid]:73137,[ci]:'Cuxhaven',[stt]:'Niedersachsen',[zip]:'27476'},
-      {[cid]:115993,[fn]:'Daniel',[ln]:'DAndrade',[ph]:'19052209600',[ad]:'1857 Creek way',[ci]:'BURLINGTON',[stt]:'NULL',[zip]:'L7L6P9'},
-      {[cid]:175106,[stt]:'California',[zip]:'91977'},
-      {[cid]:140173,[ci]:'Torrance',[stt]:'California',[zip]:'90505'},
-      {[cid]:155273,[fn]:'Daniel',[ln]:'Santos',[ph]:'351911832803',[stt]:'NULL'},
-      {[cid]:139309,[fn]:'no',[ln]:'name',[stt]:'NULL'},
-      {[cid]:122872,[ci]:'Riverside',[stt]:'New Jersey',[zip]:'8075'},
-    ];
-    const records=rows.map(v=>({id:'br'+(n++),values:v}));
-    const pf=[F('Product','text'),F('Price','number'),F('Active','checkbox')];
-    const products={id:'bt2',name:'Products',fields:pf,records:[
-      {id:'br'+(n++),values:{[pf[0].id]:'Mintbird Pro',[pf[1].id]:497,[pf[2].id]:true}},
-      {id:'br'+(n++),values:{[pf[0].id]:'Course Sprout',[pf[1].id]:97,[pf[2].id]:true}},
-    ],views:[{id:'v1',name:'Grid view'}],activeView:0};
-    const buyers={id:'bt1',name:'Buyers',demo:true,fields,records,activeView:0,views:[
-      {id:'v1',name:'2022 - 2020'},{id:'v2',name:'MB Product Order (2022 - 2020)'},{id:'v3',name:'Mintbird Export (2022 - 2020)'},{id:'v4',name:'filtered'},{id:'v5',name:'SYNC VIEW'},
-    ]};
-    products.demo=true;
-    return {activeTable:0, tables:[buyers,products]};
-  }
-  const DEMO_STATUSES=['Completed','In Progress','In Cue','Next Up','Approved','Hold','URGENT'];
-  const DEMO_LINKS=['docs.google.com/document/d/','figma.com/file/','github.com/cen/','notion.so/'];
+    const rec=(fields,vals)=>({id:'br'+(n++), values:fields.reduce((o,f,i)=>{ if(vals[i]!==undefined&&vals[i]!=='') o[f.id]=vals[i]; return o; },{})});
 
+    // Table 1 — Customers (clean, realistic CRM)
+    const cf=[F('Company','text'),F('Contact','text'),F('Email','email'),F('Phone','phone'),F('Plan','text'),F('MRR','number'),F('Status','text'),F('Signed Up','text')];
+    const customers={id:'bt1',name:'Customers',demo:true,fields:cf,activeView:0,views:[{id:'v1',name:'All customers'}],records:[
+      rec(cf,['Northwind Labs','Emma Watson','emma@northwind.io','(415) 555-0182','Enterprise',1200,'Active','Jan 12, 2026']),
+      rec(cf,['Brightpath','Liam Chen','liam@brightpath.co','(212) 555-0148','Pro',99,'Active','Feb 3, 2026']),
+      rec(cf,['Vertex Studio','Olivia Park','olivia@vertex.design','(646) 555-0170','Pro',99,'Active','Feb 21, 2026']),
+      rec(cf,['Harbor & Co','Noah Bennett','noah@harborco.com','(305) 555-0199','Starter',29,'Trial','Mar 8, 2026']),
+      rec(cf,['Lumen Analytics','Ava Rossi','ava@lumen.ai','(312) 555-0133','Enterprise',1800,'Active','Mar 15, 2026']),
+      rec(cf,['Cedar Works','Mason Reed','mason@cedarworks.com','(206) 555-0121','Starter',29,'Active','Apr 1, 2026']),
+      rec(cf,['Atlas Freight','Sophia Nguyen','sophia@atlasfreight.com','(713) 555-0165','Pro',99,'Churned','Apr 19, 2026']),
+      rec(cf,['Pine Ridge','Ethan Cole','ethan@pineridge.org','(503) 555-0112','Starter',29,'Active','May 2, 2026']),
+      rec(cf,['Quantum Retail','Isabella Diaz','bella@quantumretail.com','(480) 555-0177','Enterprise',2400,'Active','May 20, 2026']),
+      rec(cf,['Meridian Health','James Park','james@meridianhealth.com','(617) 555-0154','Pro',99,'Trial','Jun 6, 2026']),
+      rec(cf,['Solstice Media','Mia Foster','mia@solstice.tv','(323) 555-0139','Pro',99,'Active','Jun 24, 2026']),
+      rec(cf,['Ironside Mfg','Lucas Kim','lucas@ironside.io','(414) 555-0188','Enterprise',1500,'Active','Jul 1, 2026']),
+    ]};
+
+    // Table 2 — Products
+    const pf=[F('Product','text'),F('Category','text'),F('Price','number'),F('In Stock','checkbox'),F('SKU','text')];
+    const products={id:'bt2',name:'Products',demo:true,fields:pf,activeView:0,views:[{id:'v1',name:'Catalog'}],records:[
+      rec(pf,['Starter Plan','Subscription',29,true,'PLN-START']),
+      rec(pf,['Pro Plan','Subscription',99,true,'PLN-PRO']),
+      rec(pf,['Enterprise Plan','Subscription',0,true,'PLN-ENT']),
+      rec(pf,['Onboarding Package','Service',499,true,'SVC-ONBRD']),
+      rec(pf,['Priority Support','Add-on',49,true,'ADD-SUPP']),
+      rec(pf,['Extra Storage 1TB','Add-on',19,false,'ADD-STOR']),
+    ]};
+    return {activeTable:0, tables:[customers,products]};
+  }
   function demoSeed(){
-    let nid=1, ii=0, spSeq=1;
+    let nid=1, spSeq=1;
     const spaces=[{id:'sp1', name:'Main space', color:'#6b6b8a'}];   // real, empty — where the user builds
     const boards=[];   // no real boards → Demo off shows the onboarding blank slate
-    Object.entries(DEMO).forEach(([spaceName, boardsObj])=>{
+    SPACES_DEMO.forEach(sp=>{
       const sid='sp'+(++spSeq);
-      spaces.push({id:sid, name:spaceName, color:SPACE_COLORS[spSeq%SPACE_COLORS.length], demo:true});
-      Object.entries(boardsObj).forEach(([boardName, groupsObj])=>{
-        const groups=[];
-        Object.entries(groupsObj).forEach(([groupName, names],gIdx)=>{
-          const items=names.map(nm=>{
-            const idx=ii++;
-            return {id:nid++, name:nm, status:DEMO_STATUSES[idx%DEMO_STATUSES.length], docs:1, comments:0, sub:false, person:false,
-              link: idx%4===0 ? 'https://'+DEMO_LINKS[idx%DEMO_LINKS.length]+'ref'+idx : '',
-              linkText: idx%4===0 ? 'Reference doc' : '',
-              created: idx%3===0 ? '' : daysAgo((idx*5)%120),
-              assignees: idx%3===0 ? [] : [SEED_PEOPLE[idx%SEED_PEOPLE.length].id].concat(idx%6===0?[SEED_PEOPLE[(idx+2)%SEED_PEOPLE.length].id]:[]),
-              commentList: idx%5===0 ? [{id:nid++, author:'Chad Nicely', at:daysAgo(idx%25), text:'Looks good — let’s ship this.'}] : [],
-              fileList: [],
-              subitemList: idx%7===0 ? [{id:nid++,name:'Draft spec',done:true},{id:nid++,name:'Peer review',done:false}] : [],
-              activityLog: [], demo:true};
+      spaces.push({id:sid, name:sp.name, color:sp.color, demo:true});
+      sp.boards.forEach(bd=>{
+        const labelDefs=LABELS.map(L=>({id:'lb'+(nid++), name:L.name, color:L.color}));
+        const labelId=nm=>(labelDefs.find(d=>d.name===nm)||{}).id;
+        const groups=bd.groups.map((gp,gIdx)=>{
+          const items=gp.items.map(sp2=>{
+            const it={
+              id:nid++, name:sp2.n, status:sp2.s||'',
+              created: sp2.d!=null ? daysAgo(sp2.d) : '',
+              createdAt: sp2.d!=null ? Date.now()-sp2.d*86400000 : Date.now(),
+              assignees:(sp2.a||[]).slice(),
+              labels:(sp2.l||[]).map(labelId).filter(Boolean),
+              description: sp2.desc||'',
+              urls:(sp2.u||[]).map(u=>({id:nid++, url:u})),
+              commentList:(sp2.cm||[]).map(([author,ago,text])=>({id:nid++, author, at:daysAgo(ago), text})),
+              checklists: sp2.ck ? [{id:'cl'+(nid++), name:'Checklist', items:sp2.ck.map(([name,done])=>({id:'ci'+(nid++), name, done:!!done}))}] : [],
+              fileList:[], subitemList:[], activityLog:[], sub:false, person:false, demo:true,
+            };
+            (sp2.shots||[]).forEach(k=>it.fileList.push({id:'f'+(nid++), ...shotFile(k)}));
+            (sp2.f||[]).forEach(([name,type])=>it.fileList.push({id:'f'+(nid++), name, type}));
+            if(sp2.c) it.cover=COVER[sp2.c];
+            it.docs=it.fileList.length; it.comments=it.commentList.length;
+            return it;
           });
-          groups.push({id:'g'+(nid++), name:groupName, color:GROUP_COLORS[gIdx%GROUP_COLORS.length], collapsed:false, items, demo:true});
+          return {id:'g'+(nid++), name:gp.name, color:GROUP_COLORS[gIdx%GROUP_COLORS.length], collapsed:false, items, demo:true};
         });
-        boards.push({name:boardName, spaceId:sid, demo:true, columns:DEFAULT_COLS.map(c=>({...c})), groups});
+        boards.push({name:bd.name, spaceId:sid, demo:true, columns:DEFAULT_COLS.map(c=>({...c})), groups, labelDefs});
       });
     });
     const timeEntries=[
-      {id:nid++, task:'AIBot Studio — model routing', start:daysAgoMs(0,3), end:daysAgoMs(0,3)+45*60000, seconds:45*60, demo:true},
-      {id:nid++, task:'Mintbird partner review', start:daysAgoMs(0,1.5), end:daysAgoMs(0,0.5), seconds:60*60, demo:true},
+      {id:nid++, task:'Product Roadmap — onboarding flow', start:daysAgoMs(0,3), end:daysAgoMs(0,3)+45*60000, seconds:45*60, demo:true},
+      {id:nid++, task:'Campaigns — Q3 launch planning', start:daysAgoMs(0,1.5), end:daysAgoMs(0,0.5), seconds:60*60, demo:true},
     ];
     return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp1', spaceSeq:spSeq, view:'table', demo:false, demoDecided:false, sampleFlagged:true,
             people:SEED_PEOPLE.map(p=>({...p})), teams:SEED_TEAMS.map(t=>({...t})), timeEntries, timer:null, base:demoBase()};
