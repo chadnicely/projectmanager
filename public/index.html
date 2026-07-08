@@ -413,8 +413,14 @@
     html,body{overflow:hidden}
     .app{height:100vh;height:100dvh;overflow:hidden;grid-template-rows:52px 1fr}
     .body,body.nav-collapsed .body{grid-template-columns:1fr;height:100%}
-    .main{min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch}
-    .main-head{position:sticky;top:0;z-index:30;background:var(--bg);padding-left:12px;padding-right:12px}
+    .main{min-height:0;overflow-y:auto;overflow-x:clip;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+    .main-head{position:sticky;top:0;z-index:30;background:var(--bg);padding-left:12px;padding-right:12px;overflow:hidden}
+    /* trim the crowded title row so it fits the screen (no horizontal overflow -> no whole-screen shift).
+       keep the title, the team chip and the ⋯ board menu; drop the rest on mobile. */
+    .title-row{flex-wrap:wrap;max-width:100%}
+    .title-row .title-edit,.title-row .header-search,.title-row .lastseen,.title-row .arch-toggle,.title-row .title-ic:not([onclick*="openBoardMenu"]){display:none}
+    /* keep horizontal scrolling INSIDE the data areas — never let it chain to the page */
+    .table-wrap,.board-wrap,.bg-wrap{overscroll-behavior-x:contain}
     /* table & base grid: horizontal-only; their height is natural so .main scrolls the rows */
     .table-wrap{flex:none;height:auto;overflow-x:auto;overflow-y:visible;padding:8px 8px 16px;-webkit-overflow-scrolling:touch}
     .bg-wrap{flex:none;height:auto;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
