@@ -433,6 +433,9 @@
     .dfoot .del-btn,.dfoot .save-btn{height:46px;padding:0 20px}
     /* smaller titles on mobile + keep everything inside the sheet (no sideways shift) */
     .board-title{font-size:18px}
+    /* team chip ("👥 Everyone at CEN Innovations") — one compact line, truncate not wrap */
+    .board-members{flex:0 0 auto}
+    .bm-team{display:inline-block;max-width:118px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:11px;padding:3px 9px;line-height:16px;vertical-align:middle}
     .dtitle,.dtitle-row .dtitle{font-size:18px}
     .dtitle-row{flex-wrap:wrap}
     .dcols{overflow-x:hidden}
