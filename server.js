@@ -45,6 +45,7 @@ function memberEmailsOf(state, ownerEmail) {
 }
 const USERS = 'users';
 const SESSIONS = 'sessions';
+const APITOKENS = 'apitokens';   // long-lived personal API tokens (for the MCP / integrations)
 const SESSION_DAYS = 30;
 
 // ---- lazy Mongo connection (reused across requests) ----------------------
@@ -89,18 +90,32 @@ async function readJson(req, limitBytes) {
 const normEmail = e => String(e || '').trim().toLowerCase();
 const bearer = req => (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
 
-// Resolve the session token on a request → user doc, or null if unauthenticated/expired.
+// Resolve a Bearer token → user doc, or null. Accepts BOTH web session tokens and
+// long-lived personal API tokens (for the MCP). The returned user is tagged with
+// `_authVia` ('session' | 'apitoken') so sensitive actions can require a real login.
 async function authUser(req) {
   const token = bearer(req);
   if (!token) return null;
   const db = await getDb();
   const sess = await db.collection(SESSIONS).findOne({ _id: token });
-  if (!sess) return null;
-  if (sess.expiresAt && new Date(sess.expiresAt) < new Date()) {
-    await db.collection(SESSIONS).deleteOne({ _id: token }).catch(() => {});
-    return null;
+  if (sess) {
+    if (sess.expiresAt && new Date(sess.expiresAt) < new Date()) {
+      await db.collection(SESSIONS).deleteOne({ _id: token }).catch(() => {});
+      return null;
+    }
+    const u = await db.collection(USERS).findOne({ _id: sess.email });
+    if (u) u._authVia = 'session';
+    return u;
   }
-  return db.collection(USERS).findOne({ _id: sess.email });
+  // Not a session — try a personal API token (keyed by its secret).
+  const apt = await db.collection(APITOKENS).findOne({ secret: token });
+  if (apt) {
+    db.collection(APITOKENS).updateOne({ _id: apt._id }, { $set: { lastUsedAt: new Date().toISOString() } }).catch(() => {});
+    const u = await db.collection(USERS).findOne({ _id: apt.email });
+    if (u) u._authVia = 'apitoken';
+    return u;
+  }
+  return null;
 }
 
 async function startSession(db, email) {
@@ -195,6 +210,39 @@ async function handleApi(req, res, urlPath) {
   let me;
   try { me = await authUser(req); } catch (e) { return sendJson(res, 503, { error: e.message }); }
   if (!me) return sendJson(res, 401, { error: 'Sign in required' });
+
+  // ---- Personal API tokens (for the MCP / integrations) --------------------
+  // Managed only from a real web session — an API token can't mint more tokens.
+  if (urlPath === '/api/tokens' && req.method === 'GET') {
+    try {
+      const db = await getDb();
+      const list = await db.collection(APITOKENS).find({ email: me._id }).toArray();
+      const tokens = list.map(t => ({ id: t._id, name: t.name, createdAt: t.createdAt, lastUsedAt: t.lastUsedAt || null,
+        preview: (t.secret || '').slice(0, 10) + '…' }));
+      return sendJson(res, 200, { tokens });
+    } catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
+  if (urlPath === '/api/tokens' && req.method === 'POST') {
+    if (me._authVia !== 'session') return sendJson(res, 403, { error: 'Create API tokens from the web app while signed in.' });
+    try {
+      const body = await readJson(req) || {};
+      const name = (String(body.name || '').trim() || 'Claude Code').slice(0, 60);
+      const db = await getDb();
+      const secret = 'bmk_' + newToken() + newToken();   // shown once, never returned again
+      const id = newToken().slice(0, 16);
+      await db.collection(APITOKENS).insertOne({ _id: id, secret, email: me._id, name, createdAt: new Date().toISOString(), lastUsedAt: null });
+      return sendJson(res, 200, { id, name, token: secret });
+    } catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
+  if (urlPath.startsWith('/api/tokens/') && req.method === 'DELETE') {
+    if (me._authVia !== 'session') return sendJson(res, 403, { error: 'Revoke API tokens from the web app while signed in.' });
+    try {
+      const id = decodeURIComponent(urlPath.slice('/api/tokens/'.length)).replace(/\/+$/, '');
+      const db = await getDb();
+      await db.collection(APITOKENS).deleteOne({ _id: id, email: me._id });
+      return sendJson(res, 200, { ok: true });
+    } catch (e) { return sendJson(res, 503, { error: e.message }); }
+  }
 
   // GET /api/state — load THIS user's saved workspace (null if none yet)
   if (urlPath === '/api/state' && req.method === 'GET') {

@@ -3571,10 +3571,58 @@ Chad,chad@cen.com,Austin"></textarea>
        </div>
        <div class="settings-note">${on?'Turn off to hide the sample data and see only your work.':'Off — showing only your data.'}</div>
        <div class="pop-sep"></div>
+       <div class="pop-row" id="prof-connect"><span>🔌</span><span class="nm">Connect to Claude Code</span></div>
        <div class="pop-row" id="prof-logout"><span>${MI.archive}</span><span class="nm">Log out</span></div>`;
     popEl.querySelector('#prof-demo').addEventListener('click',()=>{ toggleDemo(); openProfile(anchor); });
+    popEl.querySelector('#prof-connect').addEventListener('click',()=>{ closePopover(); openConnect(); });
     popEl.querySelector('#prof-logout').addEventListener('click',()=>{ closePopover(); logout(); });
     showPopover(rect);
+  }
+  // ---- Connect to Claude Code: personal API tokens for the MCP ----
+  async function fetchTokens(){
+    try{ const r=await fetch('/api/tokens',{headers:authHeaders(),cache:'no-store'}); if(!r.ok) return []; const j=await r.json(); return j.tokens||[]; }catch(_){ return []; }
+  }
+  function mcpSnippet(){
+    return JSON.stringify({ mcpServers:{ base:{ command:'node', args:['<path-to>/mcp/server.js'], env:{ BASE_URL: location.origin, BASE_TOKEN:'<paste your token here>' } } } }, null, 2);
+  }
+  async function openConnect(){
+    let ov=document.getElementById('connect-overlay');
+    if(!ov){
+      ov=document.createElement('div'); ov.id='connect-overlay';
+      ov.style.cssText='position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+      ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+      document.body.appendChild(ov);
+    }
+    ov.innerHTML='<div id="connect-card"></div>';
+    const card=ov.querySelector('#connect-card');
+    card.style.cssText='background:var(--panel,#1c1d24);color:var(--text,#e7e9ef);border:1px solid rgba(128,128,128,.25);border-radius:14px;max-width:580px;width:100%;max-height:86vh;overflow:auto;padding:22px 24px;font:14px/1.5 ui-sans-serif,system-ui,sans-serif';
+    renderConnect(card);
+  }
+  async function renderConnect(card, freshToken){
+    const tokens=await fetchTokens();
+    const btn='padding:8px 14px;border-radius:8px;border:none;background:var(--blue,#3b5bdb);color:#fff;font-weight:600;cursor:pointer';
+    const rev='padding:5px 10px;border-radius:7px;border:1px solid rgba(226,68,92,.5);background:transparent;color:#e2445c;cursor:pointer;font-size:12px';
+    const rows=tokens.length ? tokens.map(t=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid rgba(128,128,128,.15)"><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(t.name)}</div><div style="color:var(--text-faint,#8a92a6);font-size:12px">${esc(t.preview)} · created ${esc(fmtDate(t.createdAt))}${t.lastUsedAt?' · last used '+esc(fmtDate(t.lastUsedAt)):' · never used'}</div></div><button data-revoke="${t.id}" style="${rev}">Revoke</button></div>`).join('') : '<div style="color:var(--text-faint,#8a92a6);padding:9px 0">No tokens yet.</div>';
+    const fresh=freshToken ? `<div style="background:rgba(59,91,219,.12);border:1px solid var(--blue,#3b5bdb);border-radius:10px;padding:12px;margin:12px 0"><div style="font-weight:600;margin-bottom:6px">✅ Token created — copy it now, you won't see it again</div><code id="fresh-tok" style="display:block;word-break:break-all;background:var(--bg,#111319);padding:8px;border-radius:6px;font-size:12px">${esc(freshToken)}</code><button id="copy-tok" style="${btn};margin-top:8px">Copy</button></div>` : '';
+    card.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><h2 style="margin:0;font-size:18px">🔌 Connect to Claude Code</h2><span id="connect-close" style="cursor:pointer;font-size:22px;color:var(--text-faint,#8a92a6);line-height:1">×</span></div>
+      <p style="color:var(--text-faint,#8a92a6);margin:0 0 14px">Generate a personal token so Claude (via the Base MCP) can access <b>your</b> workspace. Treat it like a password — anyone with it can read and edit your boards.</p>
+      ${fresh}
+      <button id="gen-tok" style="${btn}">＋ Generate token</button>
+      <div style="margin-top:12px">${rows}</div>
+      <div style="margin-top:16px;border-top:1px solid rgba(128,128,128,.15);padding-top:12px">
+        <div style="font-weight:600;margin-bottom:6px">Add it to Claude Code (MCP config)</div>
+        <pre style="background:var(--bg,#111319);padding:10px;border-radius:8px;overflow:auto;font-size:12px;margin:0">${esc(mcpSnippet())}</pre>
+      </div>`;
+    card.querySelector('#connect-close').addEventListener('click',()=>{ const o=document.getElementById('connect-overlay'); if(o) o.remove(); });
+    card.querySelector('#gen-tok').addEventListener('click',async()=>{
+      try{ const r=await fetch('/api/tokens',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({name:'Claude Code'})});
+        const j=await r.json().catch(()=>({})); if(!r.ok){ alert(j.error||'Could not create token'); return; }
+        renderConnect(card, j.token);
+      }catch(_){ alert('Could not reach the server.'); }
+    });
+    card.querySelectorAll('[data-revoke]').forEach(b=>b.addEventListener('click',async()=>{ try{ await fetch('/api/tokens/'+encodeURIComponent(b.dataset.revoke),{method:'DELETE',headers:authHeaders()}); }catch(_){} renderConnect(card); }));
+    const copy=card.querySelector('#copy-tok'); if(copy) copy.addEventListener('click',()=>{ try{ navigator.clipboard.writeText(freshToken); copy.textContent='Copied ✓'; }catch(_){} });
   }
   async function resetWorkspace(){
     const ok=await confirmBox('Load demo data?','This replaces your workspace with the sample data. Turn Demo off anytime in Settings to hide the samples and see only your own work.','Load demo data');
