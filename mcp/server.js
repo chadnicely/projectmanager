@@ -95,16 +95,49 @@ server.tool(
   }
 );
 
-// PUT /api/state — replace workspace
-server.tool(
-  "base_set_state",
-  "Replace the signed-in user's workspace (PUT /api/state). Pass the FULL state object — this OVERWRITES the saved workspace, so read base_get_state first and send back a modified copy. Fails for read-only (invited) members.",
-  { state: z.record(z.any()).describe("The complete workspace state object to save.") },
-  async ({ state }) => {
-    const guard = need(); if (guard) return guard;
-    const r = await api("/api/state", { method: "PUT", body: state, auth: true });
-    return r.ok ? ok(r.data) : fail(r.data);
-  }
-);
+// ---- Granular, safe workspace edits (POST /api/op) ----
+// Each does ONE validated thing server-side, so a whole-workspace overwrite is impossible.
+async function op(args) {
+  const guard = need(); if (guard) return guard;
+  const r = await api("/api/op", { method: "POST", body: args, auth: true });
+  return r.ok ? ok(r.data.result ?? r.data) : fail(r.data);
+}
+
+server.tool("base_list_boards", "List boards in your workspace with card counts.", {}, () => op({ op: "list_boards" }));
+
+server.tool("base_get_board", "Read a board's groups and cards (card ids included, for editing).",
+  { board: z.string().describe("Board name (or numeric index).") },
+  ({ board }) => op({ op: "get_board", board }));
+
+server.tool("base_create_board", "Create a new board in the active workspace.",
+  { name: z.string() },
+  ({ name }) => op({ op: "create_board", name }));
+
+server.tool("base_create_group", "Add a group (column) to a board.",
+  { board: z.string(), name: z.string() },
+  ({ board, name }) => op({ op: "create_group", board, name }));
+
+server.tool("base_add_card", "Add a card to a board group.",
+  { board: z.string(), group: z.string().optional().describe("Group name; defaults to the first group."),
+    name: z.string(), status: z.string().optional(), note: z.string().optional(),
+    assignees: z.array(z.string()).optional().describe("Person ids.") },
+  ({ board, group, name, status, note, assignees }) => op({ op: "add_card", board, group, name, status, note, assignees }));
+
+server.tool("base_update_card", "Update a card's name / status / note / assignees (get the cardId from base_get_board).",
+  { board: z.string(), cardId: z.union([z.string(), z.number()]),
+    name: z.string().optional(), status: z.string().optional(), note: z.string().optional(), assignees: z.array(z.string()).optional() },
+  ({ board, cardId, name, status, note, assignees }) => op({ op: "update_card", board, cardId, name, status, note, assignees }));
+
+server.tool("base_move_card", "Move a card to another group on the same board.",
+  { board: z.string(), cardId: z.union([z.string(), z.number()]), toGroup: z.string() },
+  ({ board, cardId, toGroup }) => op({ op: "move_card", board, cardId, toGroup }));
+
+server.tool("base_add_comment", "Add a comment to a card.",
+  { board: z.string(), cardId: z.union([z.string(), z.number()]), text: z.string(), author: z.string().optional() },
+  ({ board, cardId, text, author }) => op({ op: "add_comment", board, cardId, text, author }));
+
+server.tool("base_delete_card", "Delete a card from a board.",
+  { board: z.string(), cardId: z.union([z.string(), z.number()]) },
+  ({ board, cardId }) => op({ op: "delete_card", board, cardId }));
 
 await server.connect(new StdioServerTransport());

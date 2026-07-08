@@ -4,20 +4,31 @@ An [MCP](https://modelcontextprotocol.io) server that exposes the Base app's HTT
 API (the `server.js` deployed at **pm.nicelycontrol.com**) as tools, so an MCP
 client (Claude Code, Claude Desktop, etc.) can drive Base programmatically.
 
-## Tools (one per client endpoint)
+## Tools
 
-| Tool | Endpoint | Auth | Notes |
-|------|----------|------|-------|
-| `base_health`    | `GET /api/health`  | – | DB connectivity probe |
-| `base_signup`    | `POST /api/signup` | – | stores the returned token |
-| `base_login`     | `POST /api/login`  | – | stores the returned token |
-| `base_logout`    | `POST /api/logout` | token | clears the token |
-| `base_me`        | `GET /api/me`      | token | current user |
-| `base_get_state` | `GET /api/state`   | token | full workspace (boards/base/people/teams) |
-| `base_set_state` | `PUT /api/state`   | token | **overwrites** the workspace; read first, then send a modified copy |
+**Auth / read**
+| Tool | Purpose |
+|------|---------|
+| `base_health`    | DB connectivity probe (`GET /api/health`) |
+| `base_signup` / `base_login` | authenticate; stores the token for later calls |
+| `base_logout`    | invalidate the session |
+| `base_me`        | current user |
+| `base_get_state` | full workspace snapshot (read-only) |
+| `base_list_boards` / `base_get_board` | list boards / read a board's groups + cards (with ids) |
 
-> The `/api/sob/*` endpoints are **not** exposed — they're inbound webhooks called
-> by SaaSOnboard (shared-secret auth), not client actions.
+**Safe granular edits** (via `POST /api/op` — each does one validated thing; there is **no**
+whole-workspace overwrite tool, so an LLM can't wipe a workspace)
+| Tool | Does |
+|------|------|
+| `base_create_board` / `base_create_group` | add a board / a group (column) |
+| `base_add_card` | add a card to a group |
+| `base_update_card` | change name / status / note / assignees |
+| `base_move_card` | move a card to another group |
+| `base_add_comment` | comment on a card |
+| `base_delete_card` | delete a card |
+
+> Not exposed: raw whole-state write, and the `/api/sob/*` webhooks (inbound, shared-secret).
+> Edits require an **owner** token — invited (read-only) members are rejected.
 
 ## Install
 
@@ -53,8 +64,8 @@ Same `mcpServers` block as above.
 
 ## Typical flow
 
-1. `base_login` with your email/password (stores the token in-process).
-2. `base_get_state` to read your workspace.
-3. Modify the returned state object, then `base_set_state` with the full object to save.
+1. Authenticate — set `BASE_TOKEN` (generate one in Base → profile → **Connect to Claude Code**), or call `base_login`.
+2. `base_list_boards` → `base_get_board` to see cards + their ids.
+3. Make changes with the granular tools, e.g. `base_add_card`, `base_move_card`, `base_update_card`.
 
-Auth is per-process and in-memory: the token lives only while the server runs.
+Auth is per-process and in-memory (unless `BASE_TOKEN` is set): the login token lives only while the server runs.

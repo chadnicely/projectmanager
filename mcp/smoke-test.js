@@ -21,8 +21,13 @@ await client.connect(transport);
 const { tools } = await client.listTools();
 const names = tools.map((t) => t.name).sort();
 console.log("tools:", names.join(", "));
-const expected = ["base_get_state", "base_health", "base_login", "base_logout", "base_me", "base_set_state", "base_signup"];
-check("all 7 endpoint tools registered", expected.every((n) => names.includes(n)) && names.length === expected.length);
+const expected = [
+  "base_health", "base_signup", "base_login", "base_logout", "base_me", "base_get_state",
+  "base_list_boards", "base_get_board", "base_create_board", "base_create_group",
+  "base_add_card", "base_update_card", "base_move_card", "base_add_comment", "base_delete_card",
+];
+check("all expected tools registered", expected.every((n) => names.includes(n)));
+check("dangerous base_set_state is NOT exposed", !names.includes("base_set_state"));
 
 const health = await client.callTool({ name: "base_health", arguments: {} });
 const txt = health.content?.[0]?.text || "";

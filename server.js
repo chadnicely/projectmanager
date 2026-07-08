@@ -43,6 +43,98 @@ function memberEmailsOf(state, ownerEmail) {
   }
   return out;
 }
+
+// ---- Granular, validated workspace operations (safe alternative to whole-state PUT) ------
+// Mirrors the client's data shape. Each op mutates `state` in place and returns
+// { result, changed } or { error }. Used by /api/op (and the MCP) so an LLM makes
+// surgical edits and can never overwrite/erase the whole workspace.
+const DEFAULT_COLS_SRV = [
+  { key: 'Hold', color: '#5f6b7a' }, { key: 'URGENT', color: '#e2445c' }, { key: 'In Cue', color: '#f0a020' },
+  { key: 'Completed', color: '#a23bc7' }, { key: 'Next Up', color: '#2f9be0' }, { key: 'In Progress', color: '#3b5bdb' }, { key: 'Approved', color: '#40b869' },
+];
+function applyOp(state, body) {
+  const op = String(body && body.op || '');
+  const boards = state.boards || (state.boards = []);
+  const nid = () => { state.nextId = (state.nextId || 1000) + 1; return state.nextId; };
+  const lc = s => String(s == null ? '' : s).trim().toLowerCase();
+  const findBoard = ref => {
+    if (ref == null || ref === '') return boards[state.activeBoard || 0] || boards[0];
+    if (typeof ref === 'number') return boards[ref];
+    const r = lc(ref);
+    return boards.find(b => lc(b.name) === r) || boards.find(b => lc(b.name).includes(r));
+  };
+  const findGroup = (bd, name) => { const r = lc(name), gs = bd.groups || []; return gs.find(g => lc(g.name) === r) || gs.find(g => lc(g.name).includes(r)); };
+  const locate = (bd, id) => { for (const g of bd.groups || []) { const it = (g.items || []).find(x => String(x.id) === String(id)); if (it) return { it, g }; } return null; };
+  const cardView = it => ({ id: it.id, name: it.name, status: it.status || '', assignees: it.assignees || [], comments: (it.commentList || []).length, files: (it.fileList || []).length });
+  const newItem = (name, status, assignees) => ({
+    id: nid(), name: String(name || '').trim() || 'Untitled', status: status || '', docs: 0, comments: 0, sub: false, person: false,
+    link: '', linkText: '', created: '', createdAt: Date.now(), assignees: Array.isArray(assignees) ? assignees : [],
+    labels: [], urls: [], commentList: [], fileList: [], subitemList: [], checklists: [], activityLog: [],
+  });
+
+  switch (op) {
+    case 'list_boards':
+      return { changed: false, result: boards.map((b, i) => ({ index: i, name: b.name, space: b.spaceId, groups: (b.groups || []).length, cards: (b.groups || []).reduce((n, g) => n + (g.items || []).length, 0) })) };
+    case 'get_board': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      return { changed: false, result: { name: bd.name, groups: (bd.groups || []).map(g => ({ group: g.name, cards: (g.items || []).map(cardView) })) } };
+    }
+    case 'create_board': {
+      const name = String(body.name || '').trim(); if (!name) return { error: 'name is required' };
+      const sid = state.activeSpace || (state.spaces && state.spaces[0] && state.spaces[0].id) || 'sp1';
+      boards.push({ name, spaceId: sid, columns: DEFAULT_COLS_SRV.map(c => ({ ...c })), groups: [{ id: 'g' + nid(), name: 'New Group', color: '#868e9c', collapsed: false, items: [] }] });
+      return { changed: true, result: { ok: true, board: name, index: boards.length - 1 } };
+    }
+    case 'create_group': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      const name = String(body.name || '').trim(); if (!name) return { error: 'name is required' };
+      bd.groups = bd.groups || []; bd.groups.push({ id: 'g' + nid(), name, color: '#868e9c', collapsed: false, items: [] });
+      return { changed: true, result: { ok: true, board: bd.name, group: name } };
+    }
+    case 'add_card': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      bd.groups = bd.groups || [];
+      let g = body.group ? findGroup(bd, body.group) : bd.groups[0];
+      if (!g && body.group) { g = { id: 'g' + nid(), name: String(body.group), color: '#868e9c', collapsed: false, items: [] }; bd.groups.push(g); }
+      if (!g) return { error: 'No group to add to (create one first)' };
+      const it = newItem(body.name, body.status, body.assignees);
+      if (body.note) it.description = String(body.note);
+      g.items = g.items || []; g.items.push(it);
+      return { changed: true, result: { ok: true, cardId: it.id, board: bd.name, group: g.name } };
+    }
+    case 'update_card': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      const f = locate(bd, body.cardId); if (!f) return { error: 'Card not found' };
+      if (body.name != null) f.it.name = String(body.name);
+      if (body.status != null) f.it.status = String(body.status);
+      if (body.note != null) f.it.description = String(body.note);
+      if (Array.isArray(body.assignees)) f.it.assignees = body.assignees;
+      return { changed: true, result: { ok: true, cardId: f.it.id } };
+    }
+    case 'move_card': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      const f = locate(bd, body.cardId); if (!f) return { error: 'Card not found' };
+      const g = findGroup(bd, body.toGroup); if (!g) return { error: 'Target group not found' };
+      f.g.items = f.g.items.filter(x => x !== f.it); g.items = g.items || []; g.items.push(f.it);
+      return { changed: true, result: { ok: true, cardId: f.it.id, toGroup: g.name } };
+    }
+    case 'add_comment': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      const f = locate(bd, body.cardId); if (!f) return { error: 'Card not found' };
+      const text = String(body.text || '').trim(); if (!text) return { error: 'text is required' };
+      f.it.commentList = f.it.commentList || []; f.it.commentList.push({ id: nid(), author: body.author || 'Claude', at: new Date().toISOString(), text });
+      return { changed: true, result: { ok: true, cardId: f.it.id, comments: f.it.commentList.length } };
+    }
+    case 'delete_card': {
+      const bd = findBoard(body.board); if (!bd) return { error: 'Board not found' };
+      const f = locate(bd, body.cardId); if (!f) return { error: 'Card not found' };
+      f.g.items = f.g.items.filter(x => x !== f.it);
+      return { changed: true, result: { ok: true, deleted: body.cardId } };
+    }
+    default:
+      return { error: 'Unknown op: ' + op };
+  }
+}
 const USERS = 'users';
 const SESSIONS = 'sessions';
 const APITOKENS = 'apitokens';   // long-lived personal API tokens (for the MCP / integrations)
@@ -304,6 +396,31 @@ async function handleApi(req, res, urlPath) {
       const code = /too large/i.test(e.message) ? 413 : 503;
       return sendJson(res, code, { error: e.message });
     }
+  }
+
+  // POST /api/op — granular, validated workspace operations (safe alternative to PUT /api/state).
+  // Body: { op, ...args }. Owner-only (invited members are read-only + must use the web app so
+  // group-visibility rules aren't bypassed).
+  if (urlPath === '/api/op' && req.method === 'POST') {
+    try {
+      const body = await readJson(req, 1 * 1024 * 1024);
+      if (!body || typeof body !== 'object') return sendJson(res, 400, { error: 'Expected JSON { op, ... }' });
+      const db = await getDb();
+      const { shared } = await resolveOwner(db, me);
+      if (shared) return sendJson(res, 403, { error: 'Read-only shared workspace — use the web app.' });
+      const sid = stateIdFor(me);
+      const doc = await db.collection(STATE_COLLECTION).findOne({ _id: sid });
+      const state = doc && doc.state;
+      if (!state) return sendJson(res, 409, { error: 'No workspace yet — open Base once to create it.' });
+      const r = applyOp(state, body);
+      if (r.error) return sendJson(res, 400, { error: r.error });
+      if (r.changed) {
+        const updatedAt = new Date().toISOString();
+        await db.collection(STATE_COLLECTION).updateOne({ _id: sid }, { $set: { state, updatedAt, updatedBy: me._id } });
+        return sendJson(res, 200, { ok: true, updatedAt, result: r.result });
+      }
+      return sendJson(res, 200, { ok: true, result: r.result });
+    } catch (e) { return sendJson(res, 503, { error: e.message }); }
   }
 
   return sendJson(res, 404, { error: 'Unknown API route' });
