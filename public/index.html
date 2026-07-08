@@ -405,11 +405,15 @@
     .sidebar{position:fixed;top:52px;left:0;bottom:0;width:min(85vw,300px);z-index:10010;transform:translateX(-100%);transition:transform .22s ease;box-shadow:6px 0 28px rgba(0,0,0,.45);display:flex!important}
     body.nav-open .sidebar{transform:translateX(0)}
     body.nav-open::before{content:'';position:fixed;left:0;right:0;top:52px;bottom:0;background:rgba(0,0,0,.5);z-index:10009}
-    /* Data grid = a self-contained scroll box (Monday-style): columns scroll sideways,
-       rows scroll up/down, and the app chrome + page stay put. */
-    .board-wrap,.table-wrap{padding:10px 8px 16px;-webkit-overflow-scrolling:touch}
-    .bg-wrap{-webkit-overflow-scrolling:touch}
-    .table-wrap,.bg-wrap,.board-wrap{overflow:auto;overscroll-behavior:contain}
+    /* Mobile scroll model: the PAGE scrolls up/down (rows); the data grid scrolls
+       ONLY left/right (columns). No free 2-D panning of the table. */
+    html,body{overflow-x:hidden;overflow-y:auto}
+    .app{height:auto;min-height:100dvh;overflow:visible;grid-template-rows:auto 1fr}
+    .topbar{position:sticky;top:0;z-index:9000}
+    .body,body.nav-collapsed .body{grid-template-columns:1fr;height:auto}
+    .main{min-height:0}
+    .table-wrap,.board-wrap{padding:10px 8px 16px;height:auto;flex:none;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+    .bg-wrap{height:auto;flex:none;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
     .main-head{padding-left:12px;padding-right:12px}
   }
   .field{margin-bottom:20px}
