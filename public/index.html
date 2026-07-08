@@ -3473,10 +3473,8 @@ Chad,chad@cen.com,Austin"></textarea>
        </div>
        <div class="settings-note">${on?'Turn off to hide the sample data and see only your work.':'Off — showing only your data.'}</div>
        <div class="pop-sep"></div>
-       <div class="pop-row" id="prof-reset"><span>${MI.archive}</span><span class="nm">Demo Data</span></div>
        <div class="pop-row" id="prof-logout"><span>${MI.archive}</span><span class="nm">Log out</span></div>`;
     popEl.querySelector('#prof-demo').addEventListener('click',()=>{ toggleDemo(); openProfile(anchor); });
-    popEl.querySelector('#prof-reset').addEventListener('click',()=>{ closePopover(); resetWorkspace(); });
     popEl.querySelector('#prof-logout').addEventListener('click',()=>{ closePopover(); logout(); });
     showPopover(rect);
   }
@@ -3533,6 +3531,18 @@ Chad,chad@cen.com,Austin"></textarea>
       const del=row.querySelector('.m-del'); if(del) del.addEventListener('click',()=>removeMember(p.id));
       mem.appendChild(row);
     });
+    // Onboarding: no teammates yet (just you) → prompt to add the first one.
+    if(ppl.filter(p=>!p.me).length===0){
+      const ob=document.createElement('div'); ob.className='team-onboard';
+      ob.innerHTML=emptyState({
+        icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+        title:'Add your first team member',
+        text:'Invite the people who can log in and collaborate in this workspace. They’ll show up here and can be assigned to tasks.',
+        actions:[{id:'add',label:'＋ Add your first team member'}]
+      });
+      ob.querySelector('[data-act="add"]').addEventListener('click',()=>openMemberForm());
+      mem.appendChild(ob);
+    }
     const teamsEl=document.getElementById('team-teams'); teamsEl.innerHTML='';
     state.teams.forEach(t=>{
       const members=(t.members||[]).map(id=>personById(id)).filter(Boolean);
