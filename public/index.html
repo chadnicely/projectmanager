@@ -3473,7 +3473,7 @@ Chad,chad@cen.com,Austin"></textarea>
        </div>
        <div class="settings-note">${on?'Turn off to hide the sample data and see only your work.':'Off — showing only your data.'}</div>
        <div class="pop-sep"></div>
-       <div class="pop-row" id="prof-reset"><span>${MI.archive}</span><span class="nm">Start fresh (restore demo)</span></div>
+       <div class="pop-row" id="prof-reset"><span>${MI.archive}</span><span class="nm">Demo Data</span></div>
        <div class="pop-row" id="prof-logout"><span>${MI.archive}</span><span class="nm">Log out</span></div>`;
     popEl.querySelector('#prof-demo').addEventListener('click',()=>{ toggleDemo(); openProfile(anchor); });
     popEl.querySelector('#prof-reset').addEventListener('click',()=>{ closePopover(); resetWorkspace(); });
@@ -3481,7 +3481,7 @@ Chad,chad@cen.com,Austin"></textarea>
     showPopover(rect);
   }
   async function resetWorkspace(){
-    const ok=await confirmBox('Start fresh?','This replaces your workspace with the fresh sample data. Turn Demo off anytime in Settings to hide the samples and see only your own work.','Start fresh');
+    const ok=await confirmBox('Load demo data?','This replaces your workspace with the sample data. Turn Demo off anytime in Settings to hide the samples and see only your own work.','Load demo data');
     if(!ok) return;
     const theme=state.theme, nav=state.navCollapsed;
     state=demoSeed();
