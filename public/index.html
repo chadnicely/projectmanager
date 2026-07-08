@@ -397,10 +397,12 @@
   }
   /* ===== Mobile: sidebar -> slide-in drawer, main goes full-width ===== */
   @media (max-width:760px){
-    .topbar{gap:7px;padding:0 10px;height:52px}
-    .topbar .logo span:not(.mark){display:none}   /* keep the C mark, drop the "Cadence" word */
+    .topbar{gap:9px;padding:0 10px;height:52px}
+    .topbar .logo{display:none}                    /* drop the green "C" logo on mobile */
     #workspace-label{display:none}                 /* workspace name lives in the drawer */
     .topbar .mob-hide{display:none}
+    .topbar #nav-toggle{font-size:20px}            /* size the ☰ bars to match the other icons */
+    .topbar .dots{font-size:19px;padding:0 2px}    /* settings gear — bigger, sits on the left */
     .body,body.nav-collapsed .body{grid-template-columns:1fr}
     .sidebar{position:fixed;top:52px;left:0;bottom:0;width:min(85vw,300px);z-index:10010;transform:translateX(-100%);transition:transform .22s ease;box-shadow:6px 0 28px rgba(0,0,0,.45);display:flex!important}
     body.nav-open .sidebar{transform:translateX(0)}

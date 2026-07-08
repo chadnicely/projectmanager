@@ -1,5 +1,5 @@
 /* Cadence service worker — offline cache */
-const CACHE = 'cadence-v22';
+const CACHE = 'cadence-v23';
 const ASSETS = [
   './',
   './index.html',
