@@ -1379,7 +1379,7 @@ Chad,chad@cen.com,Austin"></textarea>
   const HL_COLORS = ['#e2445c','#eaa32a','#40b869','#2f9be0','#a23bc7','#12b886','#f0a020','#7a8899'];
   // Workspace directory (people + teams) — persisted so a real backend can replace it later
   const SEED_PEOPLE = [
-    {id:'u1', name:'Chad Nicely', me:true, color:'#c9743a'},
+    {id:'u1', name:'You', me:true, color:'#c9743a'},   // display name is synced from the signed-in account (see ensureMePerson)
     {id:'u2', name:'Adarsha Shrestha',     color:'#40b869', demo:true},
     {id:'u3', name:'Gaurav Subedi',        color:'#7a8899', demo:true},
     {id:'u4', name:'Ishworconnects',       color:'#2f9be0', demo:true},
@@ -1387,7 +1387,7 @@ Chad,chad@cen.com,Austin"></textarea>
     {id:'u6', name:'M A Kafi',             color:'#12b886', demo:true},
     {id:'u7', name:'Pranay Rajopadhyaya',  color:'#a23bc7', demo:true},
   ];
-  const SEED_TEAMS = [{id:'t1', name:'Everyone at CEN Innovations'}];
+  const SEED_TEAMS = [{id:'t1', name:'Everyone'}];
   const GROUP_COLORS=['#a23bc7','#2f9be0','#e0820b','#40b869','#e2445c','#3b5bdb','#12b886','#eaa32a'];
   const DEFAULT_GROUP_COLOR='#868e9c';   // neutral grey — groups have no color until you pick one
   const SPACE_COLORS=['#6b6b8a','#3d7bfd','#a23bc7','#df7d0b','#00c875','#e2445c','#579bfc','#037f4c'];
@@ -1521,7 +1521,7 @@ Chad,chad@cen.com,Austin"></textarea>
       {id:nid++, task:'AIBot Studio — model routing', start:daysAgoMs(0,3), end:daysAgoMs(0,3)+45*60000, seconds:45*60, demo:true},
       {id:nid++, task:'Mintbird partner review', start:daysAgoMs(0,1.5), end:daysAgoMs(0,0.5), seconds:60*60, demo:true},
     ];
-    return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp2', spaceSeq:spSeq, view:'table', demo:false, demoDecided:false, sampleFlagged:true,
+    return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp1', spaceSeq:spSeq, view:'table', demo:false, demoDecided:false, sampleFlagged:true,
             people:SEED_PEOPLE.map(p=>({...p})), teams:SEED_TEAMS.map(t=>({...t})), timeEntries, timer:null, base:demoBase()};
   }
   const defaultState = demoSeed;
@@ -3535,6 +3535,14 @@ Chad,chad@cen.com,Austin"></textarea>
   function syncCurrentUser(){
     if(_me){ CURRENT_USER.name=_me.name||_me.email; CURRENT_USER.av=initials(CURRENT_USER.name)||'🧔'; }
     else { CURRENT_USER.name='You'; CURRENT_USER.av='🧔'; }
+    ensureMePerson();
+  }
+  // Point the directory's "me" person at the signed-in account. Only fills the generic
+  // placeholder ('You'/blank) so a renamed person (e.g. an existing account) is left alone.
+  function ensureMePerson(){
+    if(!state || !Array.isArray(state.people)) return;
+    const me=state.people.find(p=>p.me);
+    if(me && _me && (!me.name || me.name==='You')) me.name = _me.name || _me.email || 'You';
   }
   const nowISO = ()=> new Date().toISOString();
   const fmtSize = n => !n?'':(n<1024?n+' B':n<1048576?(n/1024).toFixed(0)+' KB':(n/1048576).toFixed(1)+' MB');
