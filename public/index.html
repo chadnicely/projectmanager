@@ -2107,7 +2107,7 @@ Chad,chad@cen.com,Austin"></textarea>
     reconcileActive(); save(); renderAll();
   }
   function deleteBoard(){
-    if(state.boards.filter(x=>!x.archived).length<=1) return;   // keep at least one live board
+    // Deleting the last board is allowed — the sidebar + main view fall back to onboarding.
     const bd=b(); state.boards=state.boards.filter(x=>x!==bd);
     reconcileActive(); save(); renderAll();
   }
@@ -2132,7 +2132,7 @@ Chad,chad@cen.com,Austin"></textarea>
       `<div class="pop-row" id="sbm-del"><span>${MI.trash}</span><span class="nm">Delete board</span></div>`;
     popEl.querySelector('#sbm-dup').addEventListener('click',()=>{ closePopover(); duplicateBoard(bd); });
     popEl.querySelector('#sbm-arch').addEventListener('click',()=>{ closePopover(); bd.archived=true; reconcileActive(); save(); renderAll(); });
-    popEl.querySelector('#sbm-del').addEventListener('click',()=>{ closePopover(); if(state.boards.filter(x=>!x.archived).length>1){ state.boards=state.boards.filter(x=>x!==bd); reconcileActive(); save(); renderAll(); } });
+    popEl.querySelector('#sbm-del').addEventListener('click',()=>{ closePopover(); state.boards=state.boards.filter(x=>x!==bd); reconcileActive(); save(); renderAll(); });
     showPopover(rect);
   }
   function openArchived(anchor){
