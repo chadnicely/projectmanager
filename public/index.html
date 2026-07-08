@@ -937,6 +937,12 @@
   /* ===== Popover (person picker / status labels) ===== */
   .popover{position:absolute;z-index:9999;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.5);padding:8px;min-width:250px;max-width:300px;max-height:74vh;overflow:auto;display:none}
   .popover.show{display:block}
+  /* Mobile: icon popovers/menus open centered as a modal with a dimmed backdrop (after the base
+     rule so these win). positionAt() sets left/top:50% + translate to center it. */
+  @media (max-width:760px){
+    .popover{position:fixed;min-width:0;width:min(340px,92vw);max-width:92vw;max-height:80vh}
+    .popover.show{box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 100vmax rgba(0,0,0,.45)}
+  }
   .pop-box{display:flex;flex-wrap:wrap;gap:2px;border:1px solid var(--blue);border-radius:8px;padding:6px;margin-bottom:8px;min-height:38px;align-items:center}
   .pop-search{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 11px;color:var(--text);font-size:13px;outline:none;margin-bottom:6px}
   .pop-search:focus{border-color:var(--blue)}
@@ -3951,7 +3957,11 @@ Chad,chad@cen.com,Austin"></textarea>
   let popOutside=null;
   function closePopover(){ popEl.classList.remove('show'); popEl.innerHTML=''; if(popOutside){ document.removeEventListener('mousedown',popOutside); popOutside=null; } }
   function positionAt(rect){
-    popEl.style.left='0px'; popEl.style.top='0px';
+    if(window.matchMedia('(max-width:760px)').matches){   // mobile: pop it open centered in the screen
+      popEl.style.left='50%'; popEl.style.top='50%'; popEl.style.transform='translate(-50%,-50%)';
+      return;
+    }
+    popEl.style.transform=''; popEl.style.left='0px'; popEl.style.top='0px';
     const pw=popEl.offsetWidth, ph=popEl.offsetHeight;
     let left=rect.left, top=rect.bottom+6;
     if(left+pw>window.innerWidth-10) left=Math.max(10, window.innerWidth-pw-10);
