@@ -135,6 +135,25 @@ function applyOp(state, body) {
       return { error: 'Unknown op: ' + op };
   }
 }
+
+// Load the caller's workspace, apply one op, save if it changed. Owner-only (members 403).
+// Returns { code, body } for both /api/op and the /mcp endpoint.
+async function runOp(db, me, body) {
+  const { shared } = await resolveOwner(db, me);
+  if (shared) return { code: 403, body: { error: 'Read-only shared workspace — use the web app.' } };
+  const sid = stateIdFor(me);
+  const doc = await db.collection(STATE_COLLECTION).findOne({ _id: sid });
+  const state = doc && doc.state;
+  if (!state) return { code: 409, body: { error: 'No workspace yet — open Base once to create it.' } };
+  const r = applyOp(state, body);
+  if (r.error) return { code: 400, body: { error: r.error } };
+  if (r.changed) {
+    const updatedAt = new Date().toISOString();
+    await db.collection(STATE_COLLECTION).updateOne({ _id: sid }, { $set: { state, updatedAt, updatedBy: me._id } });
+    return { code: 200, body: { ok: true, updatedAt, result: r.result } };
+  }
+  return { code: 200, body: { ok: true, result: r.result } };
+}
 const USERS = 'users';
 const SESSIONS = 'sessions';
 const APITOKENS = 'apitokens';   // long-lived personal API tokens (for the MCP / integrations)
@@ -406,24 +425,78 @@ async function handleApi(req, res, urlPath) {
       const body = await readJson(req, 1 * 1024 * 1024);
       if (!body || typeof body !== 'object') return sendJson(res, 400, { error: 'Expected JSON { op, ... }' });
       const db = await getDb();
-      const { shared } = await resolveOwner(db, me);
-      if (shared) return sendJson(res, 403, { error: 'Read-only shared workspace — use the web app.' });
-      const sid = stateIdFor(me);
-      const doc = await db.collection(STATE_COLLECTION).findOne({ _id: sid });
-      const state = doc && doc.state;
-      if (!state) return sendJson(res, 409, { error: 'No workspace yet — open Base once to create it.' });
-      const r = applyOp(state, body);
-      if (r.error) return sendJson(res, 400, { error: r.error });
-      if (r.changed) {
-        const updatedAt = new Date().toISOString();
-        await db.collection(STATE_COLLECTION).updateOne({ _id: sid }, { $set: { state, updatedAt, updatedBy: me._id } });
-        return sendJson(res, 200, { ok: true, updatedAt, result: r.result });
-      }
-      return sendJson(res, 200, { ok: true, result: r.result });
+      const { code, body: out } = await runOp(db, me, body);
+      return sendJson(res, code, out);
     } catch (e) { return sendJson(res, 503, { error: e.message }); }
   }
 
   return sendJson(res, 404, { error: 'Unknown API route' });
+}
+
+// ---- MCP over HTTP (Streamable HTTP, JSON responses) ---------------------
+// Hosted MCP endpoint at POST /mcp. Auth = a Base API token in the Authorization
+// header. Exposes the same read + granular-edit tools as the local MCP.
+const MCP_TOOLS = [
+  { name: 'base_health', description: 'Check Base API + database connectivity.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'base_get_state', description: 'Full workspace snapshot (boards, base tables, people, teams).', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'base_list_boards', description: 'List boards with card counts.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'base_get_board', description: "Read a board's groups and cards (card ids included).", inputSchema: { type: 'object', properties: { board: { type: 'string' } }, required: ['board'] } },
+  { name: 'base_create_board', description: 'Create a new board.', inputSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'base_create_group', description: 'Add a group (column) to a board.', inputSchema: { type: 'object', properties: { board: { type: 'string' }, name: { type: 'string' } }, required: ['board', 'name'] } },
+  { name: 'base_add_card', description: 'Add a card to a board group.', inputSchema: { type: 'object', properties: { board: { type: 'string' }, group: { type: 'string' }, name: { type: 'string' }, status: { type: 'string' }, note: { type: 'string' }, assignees: { type: 'array', items: { type: 'string' } } }, required: ['board', 'name'] } },
+  { name: 'base_update_card', description: "Update a card's name/status/note/assignees.", inputSchema: { type: 'object', properties: { board: { type: 'string' }, cardId: {}, name: { type: 'string' }, status: { type: 'string' }, note: { type: 'string' }, assignees: { type: 'array', items: { type: 'string' } } }, required: ['board', 'cardId'] } },
+  { name: 'base_move_card', description: 'Move a card to another group.', inputSchema: { type: 'object', properties: { board: { type: 'string' }, cardId: {}, toGroup: { type: 'string' } }, required: ['board', 'cardId', 'toGroup'] } },
+  { name: 'base_add_comment', description: 'Add a comment to a card.', inputSchema: { type: 'object', properties: { board: { type: 'string' }, cardId: {}, text: { type: 'string' }, author: { type: 'string' } }, required: ['board', 'cardId', 'text'] } },
+  { name: 'base_delete_card', description: 'Delete a card.', inputSchema: { type: 'object', properties: { board: { type: 'string' }, cardId: {} }, required: ['board', 'cardId'] } },
+];
+async function mcpCallTool(db, me, name, args) {
+  args = args || {};
+  if (name === 'base_health') { await db.command({ ping: 1 }); return { content: [{ type: 'text', text: JSON.stringify({ ok: true, db: DB_NAME }) }] }; }
+  if (!me) return { isError: true, content: [{ type: 'text', text: 'Unauthorized — put your Base API token in the Authorization: Bearer header.' }] };
+  if (name === 'base_get_state') {
+    const { shared, ownerId } = await resolveOwner(db, me);
+    const id = shared ? ('user:' + ownerId) : stateIdFor(me);
+    const d = await db.collection(STATE_COLLECTION).findOne({ _id: id });
+    return { content: [{ type: 'text', text: JSON.stringify(d ? d.state : null) }] };
+  }
+  const { code, body } = await runOp(db, me, { op: name.replace(/^base_/, ''), ...args });
+  const payload = body.result !== undefined ? body.result : body;
+  return { content: [{ type: 'text', text: JSON.stringify(payload) }], isError: code >= 400 };
+}
+async function handleMcp(req, res) {
+  if (req.method !== 'POST') { res.writeHead(405, { 'Allow': 'POST', 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Use POST (JSON-RPC 2.0).' })); }
+  let me = null;
+  try { me = await authUser(req); } catch (_) { /* discovery still works unauth */ }
+  let raw; try { raw = await readBody(req, 4 * 1024 * 1024); } catch (e) { return sendJson(res, 413, { error: e.message }); }
+  let msg; try { msg = JSON.parse(raw); } catch (_) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })); }
+  let db = null; try { db = await getDb(); } catch (_) {}
+  const handleOne = async (m) => {
+    const id = (m && m.id !== undefined) ? m.id : null;
+    const isNotif = !m || m.id === undefined || m.id === null;
+    const reply = r => ({ jsonrpc: '2.0', id, result: r });
+    const err = (code, message) => ({ jsonrpc: '2.0', id, error: { code, message } });
+    try {
+      switch (m && m.method) {
+        case 'initialize': return reply({ protocolVersion: (m.params && m.params.protocolVersion) || '2024-11-05', capabilities: { tools: {} }, serverInfo: { name: 'base-mcp', version: '1.0.0' } });
+        case 'ping': return reply({});
+        case 'tools/list': return reply({ tools: MCP_TOOLS });
+        case 'tools/call': {
+          const nm = m.params && m.params.name;
+          if (!MCP_TOOLS.find(t => t.name === nm)) return err(-32601, 'Unknown tool: ' + nm);
+          return reply(await mcpCallTool(db, me, nm, (m.params && m.params.arguments) || {}));
+        }
+        default: return isNotif ? null : err(-32601, 'Method not found: ' + (m && m.method));
+      }
+    } catch (e) { return err(-32603, e.message); }
+  };
+  if (Array.isArray(msg)) {
+    const out = (await Promise.all(msg.map(handleOne))).filter(Boolean);
+    if (!out.length) { res.writeHead(202); return res.end(); }
+    res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(out));
+  }
+  const out = await handleOne(msg);
+  if (!out) { res.writeHead(202); return res.end(); }
+  res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(out));
 }
 
 // ---- static files --------------------------------------------------------
@@ -454,6 +527,11 @@ function requestHandler(req, res) {
 
   if (urlPath.startsWith('/api/')) {
     handleApi(req, res, urlPath).catch(e => sendJson(res, 500, { error: e.message }));
+    return;
+  }
+
+  if (urlPath === '/mcp') {
+    handleMcp(req, res).catch(e => { try { sendJson(res, 500, { jsonrpc: '2.0', id: null, error: { code: -32603, message: e.message } }); } catch (_) {} });
     return;
   }
 
