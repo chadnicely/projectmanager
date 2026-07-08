@@ -49,13 +49,13 @@
   body.light .topbar,
   body.light .sidebar{border-color:#e8eaee}
   *{box-sizing:border-box}
-  html,body{margin:0;height:100%}
+  html,body{margin:0;height:100%;overflow:hidden;overscroll-behavior:none}
   body{
     background:var(--bg);color:var(--text);
     font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif;
     font-size:14px;overflow:hidden;
   }
-  .app{display:grid;grid-template-rows:52px 1fr;height:100vh}
+  .app{display:grid;grid-template-rows:52px 1fr;height:100vh;height:100dvh;overflow:hidden}
 
   /* ===== Top bar ===== */
   .topbar{display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--sidebar);border-bottom:1px solid var(--border)}
@@ -405,7 +405,12 @@
     .sidebar{position:fixed;top:52px;left:0;bottom:0;width:min(85vw,300px);z-index:10010;transform:translateX(-100%);transition:transform .22s ease;box-shadow:6px 0 28px rgba(0,0,0,.45);display:flex!important}
     body.nav-open .sidebar{transform:translateX(0)}
     body.nav-open::before{content:'';position:fixed;left:0;right:0;top:52px;bottom:0;background:rgba(0,0,0,.5);z-index:10009}
-    .board-wrap,.table-wrap,.bg-wrap{-webkit-overflow-scrolling:touch}
+    /* Data grid = a self-contained scroll box (Monday-style): columns scroll sideways,
+       rows scroll up/down, and the app chrome + page stay put. */
+    .board-wrap,.table-wrap{padding:10px 8px 16px;-webkit-overflow-scrolling:touch}
+    .bg-wrap{-webkit-overflow-scrolling:touch}
+    .table-wrap,.bg-wrap,.board-wrap{overflow:auto;overscroll-behavior:contain}
+    .main-head{padding-left:12px;padding-right:12px}
   }
   .field{margin-bottom:20px}
   .field label{display:block;color:var(--text-dim);font-weight:600;margin-bottom:8px;font-size:13px}
