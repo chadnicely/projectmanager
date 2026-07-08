@@ -1521,7 +1521,7 @@ Chad,chad@cen.com,Austin"></textarea>
       {id:nid++, task:'AIBot Studio — model routing', start:daysAgoMs(0,3), end:daysAgoMs(0,3)+45*60000, seconds:45*60, demo:true},
       {id:nid++, task:'Mintbird partner review', start:daysAgoMs(0,1.5), end:daysAgoMs(0,0.5), seconds:60*60, demo:true},
     ];
-    return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp2', spaceSeq:spSeq, view:'table', demo:true, demoDecided:false, sampleFlagged:true,
+    return {activeBoard:0, nextId:nid+1000, boards, spaces, activeSpace:'sp2', spaceSeq:spSeq, view:'table', demo:false, demoDecided:false, sampleFlagged:true,
             people:SEED_PEOPLE.map(p=>({...p})), teams:SEED_TEAMS.map(t=>({...t})), timeEntries, timer:null, base:demoBase()};
   }
   const defaultState = demoSeed;
@@ -1649,7 +1649,24 @@ Chad,chad@cen.com,Austin"></textarea>
 
   // ---- auth (accounts + session token) ----
   const TOKEN_KEY='pc-token';
+  const OWNER_KEY='pc-state-owner';   // which account the cached local state belongs to
   let _token=localStorage.getItem(TOKEN_KEY)||'', _authMode='login', _me=null;
+  // Wipe any cached workspace when a DIFFERENT account signs in on this device, so one
+  // account never inherits another's boards from localStorage. Starts from a clean seed
+  // (Demo off); pullRemote() then loads this account's own server data if it has any.
+  function resetLocalStateFor(email){
+    _syncing=true;
+    state=demoSeed(); migrate();
+    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(_){}
+    try{ localStorage.setItem(OWNER_KEY, email||''); }catch(_){}
+    reconcileActive(); renderAll();
+    _syncing=false;
+  }
+  function claimLocalStateFor(email){
+    const owner=localStorage.getItem(OWNER_KEY);
+    if(owner && owner!==email){ resetLocalStateFor(email); }
+    else { try{ localStorage.setItem(OWNER_KEY, email||''); }catch(_){} }
+  }
   function authHeaders(extra){ return Object.assign({}, extra||{}, _token?{'Authorization':'Bearer '+_token}:{}); }
   function showAuth(msg){ const o=document.getElementById('auth-overlay'); if(o) o.classList.add('show'); if(msg) authError(msg); }
   function hideAuth(){ const o=document.getElementById('auth-overlay'); if(o) o.classList.remove('show'); }
@@ -1658,7 +1675,7 @@ Chad,chad@cen.com,Austin"></textarea>
   async function initAuth(){
     if(_token){
       try{ const r=await fetch('/api/me',{headers:authHeaders(),cache:'no-store'});
-        if(r.ok){ const j=await r.json(); _me=j.user; syncCurrentUser(); hideAuth(); pullRemote(); return; } }catch(_){ /* offline: allow local use */ hideAuth(); return; }
+        if(r.ok){ const j=await r.json(); _me=j.user; claimLocalStateFor(_me.email); syncCurrentUser(); hideAuth(); pullRemote(); return; } }catch(_){ /* offline: allow local use */ hideAuth(); return; }
     }
     showAuth();
   }
@@ -1673,7 +1690,9 @@ Chad,chad@cen.com,Austin"></textarea>
       const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pass,name})});
       const j=await r.json().catch(()=>({}));
       if(!r.ok){ authError(j.error||'Something went wrong.'); btn.disabled=false; return; }
-      _token=j.token; _me=j.user; localStorage.setItem(TOKEN_KEY,_token); syncCurrentUser();
+      _token=j.token; _me=j.user; localStorage.setItem(TOKEN_KEY,_token);
+      claimLocalStateFor(_me.email);   // drop any other account's cached workspace before loading this one
+      syncCurrentUser();
       document.getElementById('auth-pass').value='';
       hideAuth(); btn.disabled=false;
       pullRemote();
@@ -2749,7 +2768,7 @@ Chad,chad@cen.com,Austin"></textarea>
     save(); renderTable(); renderBoard();
   }
   async function deleteGroup(g){
-    if(b().groups.length<=1){ await confirmBox('Cannot delete','A board needs at least one group.','OK'); return; }
+    // Deleting the last group is allowed — both views show an "Add group" control on an empty board.
     if(g.items.length){ const ok=await confirmBox('Delete group',`Delete "${g.name}" and its ${g.items.length} item(s)?`); if(!ok) return; }
     b().groups = b().groups.filter(x=>x.id!==g.id);
     save(); renderTable(); renderBoard();

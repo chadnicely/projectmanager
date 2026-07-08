@@ -20,7 +20,9 @@ try { cfg = require('./config.local.js'); } catch (_) { /* optional */ }
 const MONGO_URI = process.env.MONGO_URI || cfg.MONGO_URI || '';
 const DB_NAME   = process.env.DB_NAME   || cfg.DB_NAME   || 'projectmanager';
 const STATE_COLLECTION = 'appstate';
-const STATE_ID = 'main'; // single-workspace document for now
+const STATE_ID = 'main'; // legacy shared document (pre per-user isolation) — migrated on first read
+// Each user gets their OWN workspace document, keyed by their account id (email).
+const stateIdFor = user => 'user:' + user._id;
 const USERS = 'users';
 const SESSIONS = 'sessions';
 const SESSION_DAYS = 30;
@@ -174,11 +176,26 @@ async function handleApi(req, res, urlPath) {
   try { me = await authUser(req); } catch (e) { return sendJson(res, 503, { error: e.message }); }
   if (!me) return sendJson(res, 401, { error: 'Sign in required' });
 
-  // GET /api/state — load the saved workspace state (null if none yet)
+  // GET /api/state — load THIS user's saved workspace (null if none yet)
   if (urlPath === '/api/state' && req.method === 'GET') {
     try {
       const db = await getDb();
-      const doc = await db.collection(STATE_COLLECTION).findOne({ _id: STATE_ID });
+      const sid = stateIdFor(me);
+      let doc = await db.collection(STATE_COLLECTION).findOne({ _id: sid });
+      if (!doc) {
+        // One-time migration off the legacy shared 'main' doc: only the user who last
+        // edited it adopts it. Everyone else starts with a clean, empty workspace.
+        const legacy = await db.collection(STATE_COLLECTION).findOne({ _id: STATE_ID });
+        if (legacy && legacy.updatedBy === me._id) {
+          doc = { _id: sid, state: legacy.state, updatedAt: legacy.updatedAt, updatedBy: me._id };
+          await db.collection(STATE_COLLECTION).updateOne({ _id: sid },
+            { $set: { state: legacy.state, updatedAt: legacy.updatedAt, updatedBy: me._id } }, { upsert: true }).catch(() => {});
+          // Keep the legacy 'main' doc as a recoverable backup — it's never read by other
+          // accounts (they key off their own id), so it can't leak. Mark it migrated instead.
+          await db.collection(STATE_COLLECTION).updateOne({ _id: STATE_ID },
+            { $set: { migratedTo: sid, migratedAt: new Date().toISOString() } }).catch(() => {});
+        }
+      }
       return sendJson(res, 200, { state: doc ? doc.state : null, updatedAt: doc ? doc.updatedAt : null });
     } catch (e) { return sendJson(res, 503, { error: e.message }); }
   }
@@ -193,7 +210,7 @@ async function handleApi(req, res, urlPath) {
       const db = await getDb();
       const updatedAt = new Date().toISOString();
       await db.collection(STATE_COLLECTION).updateOne(
-        { _id: STATE_ID },
+        { _id: stateIdFor(me) },
         { $set: { state, updatedAt, updatedBy: me._id } },
         { upsert: true }
       );
