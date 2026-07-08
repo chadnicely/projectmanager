@@ -1111,7 +1111,7 @@
   <div class="topbar">
     <div class="grid-icon" title="Switch app" onclick="openAppLauncher(this)"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
     <div class="top-ic" id="nav-toggle" title="Collapse / expand menu" onclick="toggleNav()">☰</div>
-    <div class="logo"><span class="mark">B</span><span>Base</span></div>
+    <div class="logo"><span class="mark" id="app-mark">◫</span><span id="app-title">Boards</span></div>
     <span class="workspace" id="workspace-label">My Workspace</span>
     <span class="dots" id="settings-btn" title="Settings" onclick="openSettings(this)">⚙</span>
     <div class="spacer"></div>
@@ -2985,13 +2985,29 @@ Chad,chad@cen.com,Austin"></textarea>
   document.getElementById('invite-emails').addEventListener('keydown',e=>{ if(e.key==='Enter' && !document.getElementById('invite-send').disabled) doInvite(); else if(e.key==='Escape') closeInvite(); });
 
   /* ---------- App launcher (suite: Boards + Base) ---------- */
+  // App identity for the top-left header (matches the launcher tiles).
+  const APPS = {
+    boards:{name:'Boards', icon:'◫',  grad:'linear-gradient(135deg,#12c2ae,#0e9e90)'},
+    base:  {name:'Base',   icon:'▦',  grad:'linear-gradient(135deg,#f0a020,#e2445c)'},
+    time:  {name:'Time',   icon:'◷',  grad:'linear-gradient(135deg,#3b5bdb,#2f9be0)'},
+    team:  {name:'Team',   icon:'👥', grad:'linear-gradient(135deg,#a23bc7,#7048e8)'},
+  };
+  // Reflect the active app in the top-left logo (icon + name); the workspace name is the sub-label.
+  function setAppHeader(name){
+    const a=APPS[name]||APPS.boards;
+    const mark=document.getElementById('app-mark'), title=document.getElementById('app-title');
+    if(mark){ mark.textContent=a.icon; mark.style.background=a.grad; }
+    if(title){ title.textContent=a.name; }
+    const wl=document.getElementById('workspace-label');
+    if(wl) wl.textContent = activeSpaceObj().name;
+  }
   function openApp(name){
     mainEl.classList.remove('base-mode','time-mode');
     document.body.classList.toggle('in-base', name==='base');
-    const wl=document.getElementById('workspace-label');
-    if(wl) wl.textContent = name==='base' ? 'Base' : name==='time' ? 'Time' : 'My Workspace';
     if(name==='base'){ closeSpaces(); closeTeam(); mainEl.classList.add('base-mode'); renderBase(); }
     else if(name==='time'){ closeSpaces(); closeTeam(); mainEl.classList.add('time-mode'); renderTime(); }
+    else { closeTeam(); }
+    setAppHeader(name);
   }
   function openAppLauncher(anchor){
     const rect=anchor.getBoundingClientRect();
@@ -3557,7 +3573,7 @@ Chad,chad@cen.com,Austin"></textarea>
   function closeMobileNav(){ document.body.classList.remove('nav-open'); }
 
   /* ---------- Team management ---------- */
-  function openTeam(){ openApp('boards'); closeSpaces(); mainEl.classList.add('team-mode'); renderTeam(); }
+  function openTeam(){ openApp('boards'); closeSpaces(); mainEl.classList.add('team-mode'); setAppHeader('team'); renderTeam(); }
   function closeTeam(){ mainEl.classList.remove('team-mode'); }
   function renderTeam(){
     const mem=document.getElementById('team-members');
@@ -4550,6 +4566,7 @@ Chad,chad@cen.com,Austin"></textarea>
   applyTheme();
   applyNav();
   renderAll();
+  setAppHeader('boards');   // default app on load
   setView(state.view||'table');
   // ---- wire login screen, then gate the app behind auth ----
   document.getElementById('arch-switch').addEventListener('click',()=>{ state.showArchived=!state.showArchived; save(); updateArchSwitch(); renderTable(); renderBoard(); });
