@@ -709,7 +709,10 @@
      tappable), let badges fall through, and neutralize :hover so iOS doesn't eat the first tap. */
   @media (max-width:760px){
     .card-edit{display:none}                         /* rename from inside the opened card */
-    .card-del{opacity:.7}                             /* visible ⋯ so it's a real target, not an invisible trap */
+    /* ⋯ menu: big, in the card's top-right corner (not an invisible inline trap) */
+    .card{position:relative}
+    .card-del{position:absolute;top:4px;right:6px;opacity:.6;font-size:22px;line-height:1;padding:4px 9px;margin:0;z-index:3}
+    .card-labels,.card-name{padding-right:28px}      /* keep content clear of the corner ⋯ */
     .card .qbadge{pointer-events:none}                /* tapping a count badge opens the card */
     .card:hover{background:var(--panel-2);box-shadow:0 1px 2px rgba(0,0,0,.14)}
     .board-wrap .card:hover{background:#23272e;box-shadow:0 1px 2px rgba(0,0,0,.5)}
