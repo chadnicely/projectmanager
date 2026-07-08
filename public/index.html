@@ -1405,6 +1405,15 @@ Chad,chad@cen.com,Austin"></textarea>
     green:svgCover('#10b981','#34d399'), amber:svgCover('#f59e0b','#fbbf24'),
     rose:svgCover('#f43f5e','#fb7185'), slate:svgCover('#475569','#64748b'), teal:svgCover('#0d9488','#2dd4bf') };
   const shotFile = key => ({ name:key+'-preview.svg', type:'image/svg+xml', dataUrl: COVER[key]||COVER.slate });
+  // A realistic "document"/screenshot preview so demo attachments actually open when clicked.
+  const docImg = title => 'data:image/svg+xml,'+encodeURIComponent(
+    "<svg xmlns='http://www.w3.org/2000/svg' width='440' height='320'><rect width='440' height='320' fill='#f4f5f7'/>"+
+    "<rect x='28' y='24' width='384' height='272' rx='10' fill='#fff' stroke='#e2e4ea'/>"+
+    "<rect x='52' y='52' width='190' height='18' rx='4' fill='#3b5bdb'/>"+
+    "<rect x='52' y='90' width='336' height='9' rx='4' fill='#c8cdd8'/><rect x='52' y='110' width='312' height='9' rx='4' fill='#c8cdd8'/>"+
+    "<rect x='52' y='130' width='336' height='9' rx='4' fill='#dfe3ea'/><rect x='52' y='150' width='260' height='9' rx='4' fill='#dfe3ea'/>"+
+    "<rect x='52' y='186' width='150' height='80' rx='6' fill='#eef1f6'/><rect x='238' y='186' width='150' height='80' rx='6' fill='#eef1f6'/>"+
+    "<text x='52' y='290' font-family='sans-serif' font-size='12' fill='#8a92a6'>"+title+"</text></svg>").replace(/'/g,'%27');
   // Named label palette (assigned per-board with fresh ids during seed)
   const LABELS = [ {name:'Feature',color:'#40b869'}, {name:'Bug',color:'#e2445c'}, {name:'Design',color:'#a23bc7'},
     {name:'Research',color:'#2f9be0'}, {name:'Urgent',color:'#f0a020'}, {name:'Docs',color:'#12b886'} ];
@@ -1424,7 +1433,7 @@ Chad,chad@cen.com,Austin"></textarea>
           {n:'Add dark mode across the app', s:'Next Up', a:['u6'], d:6, l:['Feature'], c:'slate',
             ck:[['Design tokens',true],['Theme toggle',false],['QA all screens',false]]},
           {n:'Usage analytics dashboard', s:'In Cue', a:['u3','u5'], d:8, l:['Feature','Research'], c:'sky',
-            f:[['metrics-spec.pdf','application/pdf']]},
+            f:['metrics-dashboard.png']},
         ]},
         { name:'In Progress', items:[
           {n:'Improve search performance', s:'In Progress', a:['u4'], d:1, l:['Bug'],
@@ -1450,7 +1459,7 @@ Chad,chad@cen.com,Austin"></textarea>
         { name:'Development', items:[
           {n:'Rebuild nav in the new system', s:'In Progress', a:['u4'], d:3, l:['Feature']},
           {n:'Responsive breakpoints', s:'Next Up', a:['u5'], d:6, l:['Bug']},
-          {n:'Lighthouse score to 95+', s:'In Cue', a:['u4'], d:9, l:['Research'], f:[['audit.pdf','application/pdf']]},
+          {n:'Lighthouse score to 95+', s:'In Cue', a:['u4'], d:9, l:['Research'], f:['lighthouse-report.png']},
         ]},
         { name:'QA', items:[
           {n:'Cross-browser check', s:'Hold', a:['u3'], d:10, l:['Bug']},
@@ -1484,7 +1493,7 @@ Chad,chad@cen.com,Austin"></textarea>
           {n:'Referral program', s:'Next Up', a:['u5'], d:8, l:['Feature']},
         ]},
         { name:'Live', items:[
-          {n:'Summer email series', s:'In Progress', a:['u3'], d:3, l:['Docs'], f:[['email-1.pdf','application/pdf']]},
+          {n:'Summer email series', s:'In Progress', a:['u3'], d:3, l:['Docs'], f:['email-preview.png']},
           {n:'Retargeting ads', s:'In Cue', a:['u5'], d:6},
         ]},
         { name:'Wrapped', items:[
@@ -1497,7 +1506,7 @@ Chad,chad@cen.com,Austin"></textarea>
         { name:'Applied', items:[
           {n:'Senior Frontend Engineer', s:'In Cue', a:['u4'], d:2, l:['Urgent'], c:'sky',
             desc:'Backfill for the web team. Target start: next month.',
-            f:[['resume-a.pdf','application/pdf'],['resume-b.pdf','application/pdf']]},
+            f:['candidate-a.png','candidate-b.png']},
           {n:'Product Designer', s:'In Cue', a:['u6'], d:4, l:['Design']},
         ]},
         { name:'Interviewing', items:[
@@ -1549,6 +1558,12 @@ Chad,chad@cen.com,Austin"></textarea>
       rec(cf,['Meridian Health','James Park','james@meridianhealth.com','(617) 555-0154','Pro',99,'Trial','Jun 6, 2026']),
       rec(cf,['Solstice Media','Mia Foster','mia@solstice.tv','(323) 555-0139','Pro',99,'Active','Jun 24, 2026']),
       rec(cf,['Ironside Mfg','Lucas Kim','lucas@ironside.io','(414) 555-0188','Enterprise',1500,'Active','Jul 1, 2026']),
+      rec(cf,['Riverstone Group','Grace Miller','grace@riverstone.co','(619) 555-0143','Pro',99,'Active','Jul 9, 2026']),
+      rec(cf,['Beacon Digital','Henry Adams','henry@beacondigital.com','(404) 555-0126','Starter',29,'Trial','Jul 18, 2026']),
+      rec(cf,['Summit Partners','Chloe Turner','chloe@summitpartners.com','(212) 555-0191','Enterprise',3200,'Active','Jul 26, 2026']),
+      rec(cf,['Willow Creek','Daniel Ortiz','daniel@willowcreek.io','(512) 555-0158','Pro',99,'Active','Aug 4, 2026']),
+      rec(cf,['Nimbus Cloud','Zoe Bennett','zoe@nimbuscloud.dev','(206) 555-0173','Enterprise',2100,'Active','Aug 12, 2026']),
+      rec(cf,['Copper Lane','Owen Fisher','owen@copperlane.com','(303) 555-0117','Starter',29,'Churned','Aug 20, 2026']),
     ]};
 
     // Table 2 — Products
@@ -1560,8 +1575,24 @@ Chad,chad@cen.com,Austin"></textarea>
       rec(pf,['Onboarding Package','Service',499,true,'SVC-ONBRD']),
       rec(pf,['Priority Support','Add-on',49,true,'ADD-SUPP']),
       rec(pf,['Extra Storage 1TB','Add-on',19,false,'ADD-STOR']),
+      rec(pf,['Analytics Add-on','Add-on',39,true,'ADD-ANLY']),
+      rec(pf,['Custom Domain','Add-on',15,true,'ADD-DMN']),
+      rec(pf,['Training Session','Service',299,true,'SVC-TRAIN']),
     ]};
-    return {activeTable:0, tables:[customers,products]};
+
+    // Table 3 — Deals (sales pipeline)
+    const df=[F('Deal','text'),F('Company','text'),F('Value','number'),F('Stage','text'),F('Owner','text'),F('Close Date','text'),F('Won','checkbox')];
+    const deals={id:'bt3',name:'Deals',demo:true,fields:df,activeView:0,views:[{id:'v1',name:'Pipeline'}],records:[
+      rec(df,['Northwind renewal','Northwind Labs',14400,'Closed Won','Alex Morgan','Jul 5, 2026',true]),
+      rec(df,['Summit expansion','Summit Partners',38400,'Negotiation','Priya Sharma','Aug 15, 2026',false]),
+      rec(df,['Quantum upsell','Quantum Retail',9600,'Proposal Sent','Jordan Lee','Aug 22, 2026',false]),
+      rec(df,['Nimbus annual','Nimbus Cloud',25200,'Closed Won','Sam Rivera','Aug 1, 2026',true]),
+      rec(df,['Beacon conversion','Beacon Digital',1188,'Qualified','Taylor Chen','Sep 2, 2026',false]),
+      rec(df,['Willow team plan','Willow Creek',4752,'Discovery','Diego Ramos','Sep 10, 2026',false]),
+      rec(df,['Meridian upgrade','Meridian Health',7200,'Proposal Sent','Alex Morgan','Aug 28, 2026',false]),
+      rec(df,['Ironside multi-seat','Ironside Mfg',18000,'Negotiation','Priya Sharma','Sep 5, 2026',false]),
+    ]};
+    return {activeTable:0, tables:[customers,products,deals]};
   }
   function demoSeed(){
     let nid=1, spSeq=1;
@@ -1588,7 +1619,7 @@ Chad,chad@cen.com,Austin"></textarea>
               fileList:[], subitemList:[], activityLog:[], sub:false, person:false, demo:true,
             };
             (sp2.shots||[]).forEach(k=>it.fileList.push({id:'f'+(nid++), ...shotFile(k)}));
-            (sp2.f||[]).forEach(([name,type])=>it.fileList.push({id:'f'+(nid++), name, type}));
+            (sp2.f||[]).forEach(name=>it.fileList.push({id:'f'+(nid++), name, type:'image/png', dataUrl:docImg(name), at:daysAgo(sp2.d||1)}));
             if(sp2.c) it.cover=COVER[sp2.c];
             it.docs=it.fileList.length; it.comments=it.commentList.length;
             return it;
@@ -3725,6 +3756,15 @@ Chad,chad@cen.com,Austin"></textarea>
   }
 
   /* --- Files --- */
+  // Open an attachment: preview images/PDF/text in a new tab, download anything else.
+  function openFile(f){
+    if(!f || !f.dataUrl) return;   // no stored content (e.g. a file too large to embed)
+    const a=document.createElement('a');
+    a.href=f.dataUrl;
+    const inline = f.type && (f.type.indexOf('image/')===0 || f.type==='application/pdf' || f.type.indexOf('text/')===0);
+    if(inline){ a.target='_blank'; a.rel='noopener'; } else { a.download=f.name||'download'; }
+    document.body.appendChild(a); a.click(); a.remove();
+  }
   function renderFiles(it){
     const list=document.getElementById('f-list');
     if(!it.fileList.length){ list.innerHTML=`<div class="empty-state">No files yet…</div>`; return; }
@@ -3741,6 +3781,9 @@ Chad,chad@cen.com,Austin"></textarea>
       </div><span class="file-del" title="Remove">🗑</span>`;
       const cov=el.querySelector('.file-cover');
       if(cov) cov.addEventListener('click',()=>{ it.cover = isCover ? null : f.dataUrl; save(); renderCover(it); renderFiles(it); renderTable(); renderBoard(); });
+      // Click the thumbnail or name to open/download the file.
+      const openEls=[el.querySelector('.file-thumb'), el.querySelector('.file-name')];
+      openEls.forEach(o=>{ if(!o) return; o.style.cursor=f.dataUrl?'pointer':'default'; o.title=f.dataUrl?'Open':''; o.addEventListener('click',()=>openFile(f)); });
       el.querySelector('.file-desc').addEventListener('input',e=>{ f.desc=e.target.value; save(); });
       el.querySelector('.file-del').addEventListener('click',()=>{
         it.fileList=it.fileList.filter(x=>x.id!==f.id);
@@ -3756,9 +3799,10 @@ Chad,chad@cen.com,Austin"></textarea>
     files.forEach(file=>{
       const rec={id:state.nextId++, name:file.name, type:file.type, size:file.size, at:nowISO(), dataUrl:null, desc:''};
       it.fileList.unshift(rec);
-      if(file.type.startsWith('image/') && file.size < 2*1048576){
+      // Store the file content for ALL types (up to 5MB) so it can be opened/downloaded later.
+      if(file.size < 5*1048576){
         const r=new FileReader(); r.onload=()=>{ rec.dataUrl=r.result; finish(); }; r.onerror=finish; r.readAsDataURL(file);
-      } else finish();
+      } else finish();   // too large to embed — keep the name/metadata only
     });
   }
 
