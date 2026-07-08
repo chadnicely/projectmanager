@@ -62,6 +62,18 @@ Environment:
 
 Same `mcpServers` block as above.
 
+## Two ways to authenticate the hosted endpoint
+
+- **OAuth (recommended)** — point your client at `https://pm.nicelycontrol.com/mcp` with **no token**.
+  On the first call it returns `401` with a `WWW-Authenticate` pointer; the client then walks the
+  standard OAuth 2.1 flow (metadata discovery → dynamic client registration → PKCE) and opens a
+  **Base login page**. After you sign in, the client gets a token automatically — nothing to paste.
+- **Pasted token** — generate one in Base (profile → Connect to Claude Code) and send it as
+  `Authorization: Bearer <token>`. Works for clients without OAuth support, or the local stdio server.
+
+OAuth endpoints: `/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`,
+`/register`, `/authorize`, `/token`.
+
 ## Typical flow
 
 1. Authenticate — set `BASE_TOKEN` (generate one in Base → profile → **Connect to Claude Code**), or call `base_login`.

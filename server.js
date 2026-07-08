@@ -7,6 +7,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { hashPassword, verifyPassword, newToken } = require('./auth.js');
 const sob = require('./sob.js');   // SaaSOnboard (SOB) Connect — mirror users + access
 
@@ -466,7 +467,13 @@ async function mcpCallTool(db, me, name, args) {
 async function handleMcp(req, res) {
   if (req.method !== 'POST') { res.writeHead(405, { 'Allow': 'POST', 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Use POST (JSON-RPC 2.0).' })); }
   let me = null;
-  try { me = await authUser(req); } catch (_) { /* discovery still works unauth */ }
+  try { me = await authUser(req); } catch (_) {}
+  // No valid token → 401 with a pointer to the OAuth metadata, which makes MCP clients
+  // start the "Connect → log in" flow. (A pasted API token also satisfies this.)
+  if (!me) {
+    res.writeHead(401, { 'WWW-Authenticate': 'Bearer resource_metadata="' + baseUrl(req) + '/.well-known/oauth-protected-resource"', 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message: 'Unauthorized — connect your Base account.' } }));
+  }
   let raw; try { raw = await readBody(req, 4 * 1024 * 1024); } catch (e) { return sendJson(res, 413, { error: e.message }); }
   let msg; try { msg = JSON.parse(raw); } catch (_) { res.writeHead(400, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } })); }
   let db = null; try { db = await getDb(); } catch (_) {}
@@ -497,6 +504,124 @@ async function handleMcp(req, res) {
   const out = await handleOne(msg);
   if (!out) { res.writeHead(202); return res.end(); }
   res.writeHead(200, { 'Content-Type': 'application/json' }); return res.end(JSON.stringify(out));
+}
+
+// ---- OAuth 2.1 (MCP remote auth: discovery + dynamic registration + PKCE) --------------
+const OAUTH_CLIENTS = 'oauth_clients';
+const OAUTH_CODES = 'oauth_codes';
+const baseUrl = req => ((req.headers['x-forwarded-proto'] || 'https').split(',')[0]) + '://' + req.headers.host;
+const escHtml = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function readForm(req) {
+  const raw = await readBody(req, 256 * 1024);
+  const o = {}; for (const [k, v] of new URLSearchParams(raw)) o[k] = v; return o;
+}
+function authorizeForm(p, error) {
+  const get = k => (p && typeof p.get === 'function') ? (p.get(k) || '') : ((p && p[k]) || '');
+  const hidden = ['client_id', 'redirect_uri', 'code_challenge', 'code_challenge_method', 'state', 'scope', 'response_type']
+    .map(k => `<input type="hidden" name="${k}" value="${escHtml(get(k))}">`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Authorize Claude · Base</title><style>
+:root{color-scheme:light dark}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0c1312;color:#e7efed;
+font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.card{width:min(400px,92vw);background:#121b1a;border:1px solid #213230;border-radius:16px;padding:30px 28px}
+.mark{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;
+background:linear-gradient(135deg,#12c2ae,#0e9e90);margin-bottom:16px}
+h1{font-size:20px;margin:0 0 6px;letter-spacing:-.3px}p.sub{margin:0 0 20px;color:#93a5a1;font-size:14px}
+label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#93a5a1;margin:14px 0 5px}
+input[type=email],input[type=password]{width:100%;padding:11px 12px;border-radius:9px;border:1px solid #2b3d3a;
+background:#0c1312;color:#e7efed;font-size:15px;box-sizing:border-box}
+input:focus{outline:none;border-color:#2dd4bf}
+button{width:100%;margin-top:22px;padding:12px;border:none;border-radius:9px;background:#0e9e90;color:#fff;
+font-weight:700;font-size:15px;cursor:pointer}button:hover{background:#12b8a6}
+.err{background:rgba(226,68,92,.15);border:1px solid rgba(226,68,92,.5);color:#ff9db0;padding:9px 12px;border-radius:9px;font-size:13.5px;margin-bottom:14px}
+.note{margin-top:18px;color:#7c8d89;font-size:12.5px;text-align:center}
+</style></head><body><form class="card" method="post" action="/authorize">
+<div class="mark">B</div><h1>Authorize Claude</h1>
+<p class="sub">Sign in to Base to let Claude access your workspace.</p>
+${error ? `<div class="err">${escHtml(error)}</div>` : ''}
+<label>Email</label><input type="email" name="email" autocomplete="username" required autofocus>
+<label>Password</label><input type="password" name="password" autocomplete="current-password" required>
+${hidden}<button type="submit">Sign in &amp; authorize</button>
+<div class="note">Claude will be able to read and edit your boards. Revoke anytime in Base.</div>
+</form></body></html>`;
+}
+async function handleOAuth(req, res, urlPath) {
+  const origin = baseUrl(req);
+  const db = await getDb();
+  if (req.method === 'GET' && urlPath === '/.well-known/oauth-authorization-server') {
+    return sendJson(res, 200, {
+      issuer: origin, authorization_endpoint: origin + '/authorize', token_endpoint: origin + '/token',
+      registration_endpoint: origin + '/register', response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'], code_challenge_methods_supported: ['S256', 'plain'],
+      token_endpoint_auth_methods_supported: ['none'], scopes_supported: ['base'],
+    });
+  }
+  if (req.method === 'GET' && urlPath.startsWith('/.well-known/oauth-protected-resource')) {
+    return sendJson(res, 200, { resource: origin + '/mcp', authorization_servers: [origin] });
+  }
+  if (req.method === 'POST' && urlPath === '/register') {
+    const body = await readJson(req) || {};
+    const redirect_uris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+    const client_id = 'client_' + newToken().slice(0, 24);
+    await db.collection(OAUTH_CLIENTS).insertOne({ _id: client_id, redirect_uris, name: body.client_name || '', createdAt: new Date().toISOString() });
+    return sendJson(res, 201, { client_id, redirect_uris, token_endpoint_auth_method: 'none', grant_types: ['authorization_code', 'refresh_token'], response_types: ['code'] });
+  }
+  if (req.method === 'GET' && urlPath === '/authorize') {
+    const q = new URL(req.url, origin).searchParams;
+    const client = await db.collection(OAUTH_CLIENTS).findOne({ _id: q.get('client_id') });
+    if (!client) { res.writeHead(400, { 'Content-Type': 'text/html' }); return res.end('<p>Unknown or missing client_id.</p>'); }
+    const ru = q.get('redirect_uri');
+    if (!ru || (client.redirect_uris.length && !client.redirect_uris.includes(ru))) { res.writeHead(400, { 'Content-Type': 'text/html' }); return res.end('<p>Invalid redirect_uri.</p>'); }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(authorizeForm(q, ''));
+  }
+  if (req.method === 'POST' && urlPath === '/authorize') {
+    const form = await readForm(req);
+    const client = await db.collection(OAUTH_CLIENTS).findOne({ _id: form.client_id });
+    if (!client) { res.writeHead(400, { 'Content-Type': 'text/html' }); return res.end('<p>Unknown client.</p>'); }
+    if (client.redirect_uris.length && !client.redirect_uris.includes(form.redirect_uri)) { res.writeHead(400, { 'Content-Type': 'text/html' }); return res.end('<p>Invalid redirect_uri.</p>'); }
+    const email = normEmail(form.email);
+    const u = await db.collection(USERS).findOne({ _id: email });
+    if (!u || !u.salt || !u.hash || !verifyPassword(String(form.password || ''), u.salt, u.hash)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(authorizeForm(form, 'Wrong email or password.'));
+    }
+    const code = newToken();
+    await db.collection(OAUTH_CODES).insertOne({
+      _id: code, client_id: form.client_id, redirect_uri: form.redirect_uri, email,
+      code_challenge: form.code_challenge || '', code_challenge_method: form.code_challenge_method || 'plain',
+      scope: form.scope || 'base', expiresAt: new Date(Date.now() + 600000).toISOString(),
+    });
+    const sep = form.redirect_uri.includes('?') ? '&' : '?';
+    const loc = form.redirect_uri + sep + 'code=' + encodeURIComponent(code) + (form.state ? '&state=' + encodeURIComponent(form.state) : '');
+    res.writeHead(302, { Location: loc }); return res.end();
+  }
+  if (req.method === 'POST' && urlPath === '/token') {
+    const form = await readForm(req);
+    if (form.grant_type === 'authorization_code') {
+      const rec = await db.collection(OAUTH_CODES).findOne({ _id: form.code || '' });
+      if (!rec) return sendJson(res, 400, { error: 'invalid_grant' });
+      await db.collection(OAUTH_CODES).deleteOne({ _id: rec._id });
+      if (rec.expiresAt && new Date(rec.expiresAt) < new Date()) return sendJson(res, 400, { error: 'invalid_grant', error_description: 'code expired' });
+      if (rec.redirect_uri !== form.redirect_uri) return sendJson(res, 400, { error: 'invalid_grant', error_description: 'redirect_uri mismatch' });
+      if (rec.code_challenge) {
+        const ver = String(form.code_verifier || '');
+        const got = rec.code_challenge_method === 'S256' ? crypto.createHash('sha256').update(ver).digest('base64url') : ver;
+        if (got !== rec.code_challenge) return sendJson(res, 400, { error: 'invalid_grant', error_description: 'PKCE verification failed' });
+      }
+      const access = newToken() + newToken(), refresh = newToken() + newToken();
+      await db.collection(APITOKENS).insertOne({ _id: newToken().slice(0, 16), secret: access, refresh, email: rec.email, name: 'Claude (OAuth)', via: 'oauth', scope: rec.scope, createdAt: new Date().toISOString(), lastUsedAt: null });
+      return sendJson(res, 200, { access_token: access, token_type: 'Bearer', refresh_token: refresh, scope: rec.scope || 'base' });
+    }
+    if (form.grant_type === 'refresh_token') {
+      const rec = await db.collection(APITOKENS).findOne({ refresh: form.refresh_token || '' });
+      if (!rec) return sendJson(res, 400, { error: 'invalid_grant' });
+      const access = newToken() + newToken();
+      await db.collection(APITOKENS).updateOne({ _id: rec._id }, { $set: { secret: access, lastUsedAt: new Date().toISOString() } });
+      return sendJson(res, 200, { access_token: access, token_type: 'Bearer', refresh_token: form.refresh_token, scope: rec.scope || 'base' });
+    }
+    return sendJson(res, 400, { error: 'unsupported_grant_type' });
+  }
+  return sendJson(res, 404, { error: 'Unknown OAuth route' });
 }
 
 // ---- static files --------------------------------------------------------
@@ -532,6 +657,12 @@ function requestHandler(req, res) {
 
   if (urlPath === '/mcp') {
     handleMcp(req, res).catch(e => { try { sendJson(res, 500, { jsonrpc: '2.0', id: null, error: { code: -32603, message: e.message } }); } catch (_) {} });
+    return;
+  }
+
+  // OAuth 2.1 (MCP remote auth): discovery, dynamic registration, authorize, token.
+  if (urlPath.startsWith('/.well-known/oauth-') || urlPath === '/register' || urlPath === '/authorize' || urlPath === '/token') {
+    handleOAuth(req, res, urlPath).catch(e => { try { sendJson(res, 500, { error: e.message }); } catch (_) {} });
     return;
   }
 
