@@ -395,6 +395,18 @@
     .dside{border-left:0;border-top:1px solid var(--border)}
     .dgrid{grid-template-columns:1fr}
   }
+  /* ===== Mobile: sidebar -> slide-in drawer, main goes full-width ===== */
+  @media (max-width:760px){
+    .topbar{gap:7px;padding:0 10px;height:52px}
+    .topbar .logo span:not(.mark){display:none}   /* keep the C mark, drop the "Cadence" word */
+    #workspace-label{display:none}                 /* workspace name lives in the drawer */
+    .topbar .mob-hide{display:none}
+    .body,body.nav-collapsed .body{grid-template-columns:1fr}
+    .sidebar{position:fixed;top:52px;left:0;bottom:0;width:min(85vw,300px);z-index:10010;transform:translateX(-100%);transition:transform .22s ease;box-shadow:6px 0 28px rgba(0,0,0,.45);display:flex!important}
+    body.nav-open .sidebar{transform:translateX(0)}
+    body.nav-open::before{content:'';position:fixed;left:0;right:0;top:52px;bottom:0;background:rgba(0,0,0,.5);z-index:10009}
+    .board-wrap,.table-wrap,.bg-wrap{-webkit-overflow-scrolling:touch}
+  }
   .field{margin-bottom:20px}
   .field label{display:block;color:var(--text-dim);font-weight:600;margin-bottom:8px;font-size:13px}
   .field .input{background:var(--panel);border:1px solid var(--border);border-radius:8px;height:44px;display:flex;align-items:center;padding:0 12px;color:var(--text)}
@@ -1014,9 +1026,9 @@
     <div class="spacer"></div>
     <span id="sync-dot" data-state="idle" title="Cloud sync"></span>
     <div class="top-ic" id="team-btn" title="Team & members" onclick="openTeam()">👥</div>
-    <div class="top-ic" title="Invite members" onclick="openInvite()">👤⁺</div>
-    <div class="top-ic">🔔</div>
-    <div class="top-ic">?</div>
+    <div class="top-ic mob-hide" title="Invite members" onclick="openInvite()">👤⁺</div>
+    <div class="top-ic mob-hide">🔔</div>
+    <div class="top-ic mob-hide">?</div>
     <div class="top-ic" id="theme-btn" title="Toggle light / dark" onclick="toggleTheme()">🌙</div>
     <div class="avatar" id="avatar-btn" title="Profile" onclick="openProfile(this)">🧔</div>
   </div>
@@ -1877,7 +1889,7 @@ Chad,chad@cen.com,Austin"></textarea>
   let itemFilter='';
   const matchesFilter = it => { const q=itemFilter.trim().toLowerCase(); return !q || it.name.toLowerCase().includes(q); };
   function onItemSearch(v){ itemFilter=v; renderTable(); renderBoard(); }
-  function switchBoard(i){ state.activeBoard=i; state.activeSpace=state.boards[i].spaceId; edit=null; selectedIds.clear(); renderSelBar(); closeSpaces(); closeTeam(); save(); renderAll(); }
+  function switchBoard(i){ state.activeBoard=i; state.activeSpace=state.boards[i].spaceId; edit=null; selectedIds.clear(); renderSelBar(); closeSpaces(); closeTeam(); save(); renderAll(); closeMobileNav(); }
   function reorderBoards(fromIdx, toIdx, before){
     if(fromIdx===toIdx) return;
     const active=state.boards[state.activeBoard];
@@ -3285,7 +3297,11 @@ Chad,chad@cen.com,Austin"></textarea>
   }
   function toggleTheme(){ state.theme = state.theme==='light' ? 'dark' : 'light'; applyTheme(); save(); }
   function applyNav(){ document.body.classList.toggle('nav-collapsed', !!state.navCollapsed); }
-  function toggleNav(){ state.navCollapsed=!state.navCollapsed; applyNav(); save(); setTimeout(updateHScroll,200); }
+  function toggleNav(){
+    if (window.matchMedia('(max-width:760px)').matches){ document.body.classList.toggle('nav-open'); return; }   // mobile: open/close the drawer
+    state.navCollapsed=!state.navCollapsed; applyNav(); save(); setTimeout(updateHScroll,200);
+  }
+  function closeMobileNav(){ document.body.classList.remove('nav-open'); }
 
   /* ---------- Team management ---------- */
   function openTeam(){ openApp('boards'); closeSpaces(); mainEl.classList.add('team-mode'); renderTeam(); }
@@ -4243,6 +4259,12 @@ Chad,chad@cen.com,Austin"></textarea>
   setView(state.view||'table');
   // ---- wire login screen, then gate the app behind auth ----
   document.getElementById('arch-switch').addEventListener('click',()=>{ state.showArchived=!state.showArchived; save(); updateArchSwitch(); renderTable(); renderBoard(); });
+  // Mobile drawer: tap the dimmed backdrop (anywhere outside the sidebar) to close it.
+  document.addEventListener('click', e => {
+    if (!document.body.classList.contains('nav-open')) return;
+    if (e.target.closest('.sidebar') || e.target.closest('#nav-toggle')) return;
+    closeMobileNav();
+  });
   document.getElementById('auth-go').addEventListener('click',submitAuth);
   ['auth-email','auth-pass','auth-name'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); submitAuth(); } }));
   document.getElementById('auth-switch-link').addEventListener('click',()=>setAuthMode(_authMode==='login'?'signup':'login'));
