@@ -1363,7 +1363,7 @@ Chad,chad@cen.com,Austin"></textarea>
   /* =====================================================================
      Plaky — stateful prototype with localStorage persistence
      ===================================================================== */
-  const KEY = 'plaky-state-v2';
+  const KEY = 'plaky-state-v3';   // bumped from v2 to drop stale local caches that resurrected deleted data
   const PALETTE = ['#5f6070','#df7d0b','#3d7bfd','#a23bc7','#e2445c','#00c875','#579bfc','#fdab3d','#a25ddc','#037f4c'];
   const DEFAULT_COLS = [
     {key:'Hold',        color:'#5f6b7a'},
@@ -1529,10 +1529,14 @@ Chad,chad@cen.com,Austin"></textarea>
   let state;
   try { state = JSON.parse(localStorage.getItem(KEY)) || demoSeed(); }
   catch(e){ state = demoSeed(); }
-  if(!state.boards || !state.boards.length) state = demoSeed();
+  // An empty board list is a valid, intentional state (you deleted everything) — do NOT
+  // resurrect the sample set. Only reseed when the stored object is structurally broken.
+  if(!state || typeof state!=='object') state = demoSeed();
+  if(!Array.isArray(state.boards)) state.boards = [];
 
   migrate();
   function migrate(){
+  if(!Array.isArray(state.boards)) state.boards = [];   // empty account is valid; never crash on it
   // Migrate older saved state that predates spaces
   if(!state.spaces || !state.spaces.length){
     state.spaces = [{id:'sp1', name:'Main space', color:'#6b6b8a'}];
@@ -1551,12 +1555,9 @@ Chad,chad@cen.com,Austin"></textarea>
   if(!state.teams  || !state.teams.length)  state.teams  = SEED_TEAMS.map(t=>({...t}));
   state.people.forEach(p=>{ if(!p.role) p.role='member'; });
   state.teams.forEach(t=>{ if(!t.members) t.members = state.people.map(p=>p.id); });   // "Everyone" starts with all
-  if(!state.timeEntries || !state.timeEntries.length) state.timeEntries=[
-    {id:state.nextId++, task:'AIBot Studio — model routing', start:daysAgoMs(0,3), end:daysAgoMs(0,3)+45*60000, seconds:45*60, demo:true},
-    {id:state.nextId++, task:'Mintbird partner review', start:daysAgoMs(0,1.5), end:daysAgoMs(0,0.5), seconds:60*60, demo:true},
-  ];
+  if(!Array.isArray(state.timeEntries)) state.timeEntries=[];   // deleted time entries stay deleted
   if(state.timer===undefined) state.timer=null;
-  if(!state.base || !state.base.tables) state.base=demoBase();
+  if(!state.base || !Array.isArray(state.base.tables)) state.base={activeTable:0, tables:[]};   // deleted base tables stay deleted
   // One-time: flag the ORIGINAL sample data as demo so it hides when Demo is off.
   // (Boards demo content was always flagged; the seed Base tables + seed people never were.)
   if(!state.sampleFlagged){
@@ -1733,7 +1734,9 @@ Chad,chad@cen.com,Austin"></textarea>
       if(r.status===401){ onSignedOut(); return; }
       if(!r.ok){ _remoteOn=(r.status!==404); return; }
       const j=await r.json();
-      if(j && j.state && j.state.boards && j.state.boards.length){
+      if(j && j.state){
+        // A saved state exists — load it, even if it has zero boards. An empty account
+        // is a real state and must NOT be overwritten by the local sample seed.
         _syncing=true;
         state=j.state; migrate();
         try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(_){}
@@ -1741,7 +1744,7 @@ Chad,chad@cen.com,Austin"></textarea>
         _syncing=false;
         setSyncDot('ok');
       } else {
-        pushRemote();                         // server empty → seed it from local
+        pushRemote();                         // no saved state yet (brand-new account) → seed it from local
       }
     }catch(e){ /* offline — keep working from the local copy */
       console.error('[state load/render error]', e);
