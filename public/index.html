@@ -416,8 +416,9 @@
     /* table & base grid: horizontal-only; their height is natural so .main scrolls the rows */
     .table-wrap{flex:none;height:auto;overflow-x:auto;overflow-y:visible;padding:8px 8px 16px;-webkit-overflow-scrolling:touch}
     .bg-wrap{flex:none;height:auto;overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch}
-    /* kanban keeps its own contained scroll (columns side-to-side, cards within) */
-    .board-wrap{flex:1;min-height:0;overflow:auto;padding:10px 8px 14px;-webkit-overflow-scrolling:touch}
+    /* kanban: columns scroll side-to-side only; cards scroll vertically INSIDE each column
+       (via .col-cards) so the whole board can't drift around in 2-D */
+    .board-wrap{flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding:10px 8px 14px;-webkit-overflow-scrolling:touch}
     /* ===== Card / bar detail popup -> full-width bottom sheet (friendly to open, nothing cut off) ===== */
     .drawer{top:auto;bottom:0;left:0;right:0;transform:translateY(100%);width:100%;max-width:100%;height:94dvh;max-height:94dvh;border-radius:18px 18px 0 0;border-left:0;border-right:0;border-bottom:0}
     .drawer.show{transform:translateY(0)}
@@ -602,6 +603,9 @@
   /* ===== Kanban / Trello board ===== */
   .board-wrap{flex:1;overflow:auto;padding:18px 22px 22px;min-height:0;display:none}
   .board-wrap.show{display:block}
+  /* Mobile (after the base rule so it wins): columns scroll side-to-side only; cards scroll
+     vertically inside each column, so the board can't drift around in 2-D. */
+  @media (max-width:760px){ .board-wrap{overflow-x:auto;overflow-y:hidden} }
   /* Empty / onboarding states (shared across Boards, Base, Time, Spaces) */
   #board-empty{display:none;flex:1;min-height:0;overflow:auto}
   .main.no-board .main-head,.main.no-board .toolbar,.main.no-board #table-wrap,.main.no-board #board-wrap{display:none}
@@ -2349,7 +2353,7 @@ Chad,chad@cen.com,Austin"></textarea>
     tr.querySelector('.person-cell').addEventListener('click',e=>{e.stopPropagation();openPersonPopover(e.currentTarget,it);});
     tr.querySelector('.date-cell').addEventListener('click',e=>{ if(e.target.tagName!=='A') openDatePopover(tr.querySelector('.date-cell'), it); });
     tr.querySelector('.link-cell').addEventListener('click',e=>{ if(e.target.tagName!=='A') openLinkPopover(tr.querySelector('.link-cell'), it); });
-    tr.draggable = !(edit && edit.type==='item' && edit.id===it.id);
+    tr.draggable = !(edit && edit.type==='item' && edit.id===it.id) && !window.matchMedia('(max-width:760px)').matches;   // draggable breaks single-tap on touch
     tr.addEventListener('dragstart',e=>{ dragItemId=it.id; dragGroupId=null; tr.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',String(it.id)); });
     tr.addEventListener('dragend',()=>{ dragItemId=null; renderTable(); });
     tr.addEventListener('dragover',e=>{ if(dragGroupId!=null) return; e.preventDefault(); const r=tr.getBoundingClientRect(); const before=e.clientY<r.top+r.height/2; tr.classList.toggle('drop-above',before); tr.classList.toggle('drop-below',!before); });
@@ -2514,7 +2518,7 @@ Chad,chad@cen.com,Austin"></textarea>
     const c=document.createElement('div');
     c.className='card';c.dataset.id=it.id;
     const editingThis = edit && edit.type==='item' && edit.id===it.id && state.view==='board';
-    c.draggable=!editingThis;
+    c.draggable=!editingThis && !window.matchMedia('(max-width:760px)').matches;   // draggable breaks single-tap on touch
     c.style.borderLeftColor=color;
     const nameHtml = editingThis
       ? `<input class="inline-edit" id="inline-input" style="width:100%" value="${esc(it.name)}" />`
