@@ -21,8 +21,28 @@ const MONGO_URI = process.env.MONGO_URI || cfg.MONGO_URI || '';
 const DB_NAME   = process.env.DB_NAME   || cfg.DB_NAME   || 'projectmanager';
 const STATE_COLLECTION = 'appstate';
 const STATE_ID = 'main'; // legacy shared document (pre per-user isolation) — migrated on first read
+const MEMBERSHIPS = 'memberships'; // email -> owner email of a workspace they've been invited into
 // Each user gets their OWN workspace document, keyed by their account id (email).
 const stateIdFor = user => 'user:' + user._id;
+
+// Resolve which workspace a signed-in user reads: their own, unless they've been invited
+// into someone else's (then that owner's shared workspace, read-only).
+async function resolveOwner(db, me) {
+  const mem = await db.collection(MEMBERSHIPS).findOne({ _id: me._id });
+  if (mem && mem.owner && mem.owner !== me._id) return { ownerId: mem.owner, shared: true };
+  return { ownerId: me._id, shared: false };
+}
+// Member emails invited into a workspace = the people in its directory that carry an email
+// (excluding the owner themselves).
+function memberEmailsOf(state, ownerEmail) {
+  const out = [];
+  const ppl = (state && Array.isArray(state.people)) ? state.people : [];
+  for (const p of ppl) {
+    const e = normEmail(p && p.email);
+    if (e && e !== ownerEmail && !out.includes(e)) out.push(e);
+  }
+  return out;
+}
 const USERS = 'users';
 const SESSIONS = 'sessions';
 const SESSION_DAYS = 30;
@@ -180,6 +200,13 @@ async function handleApi(req, res, urlPath) {
   if (urlPath === '/api/state' && req.method === 'GET') {
     try {
       const db = await getDb();
+      const { ownerId, shared } = await resolveOwner(db, me);
+      if (shared) {
+        // Invited member → read-only view of the owner's shared workspace.
+        const sdoc = await db.collection(STATE_COLLECTION).findOne({ _id: 'user:' + ownerId });
+        return sendJson(res, 200, { state: sdoc ? sdoc.state : null, updatedAt: sdoc ? sdoc.updatedAt : null,
+          shared: true, owner: ownerId, you: me._id, readOnly: true });
+      }
       const sid = stateIdFor(me);
       let doc = await db.collection(STATE_COLLECTION).findOne({ _id: sid });
       if (!doc) {
@@ -196,11 +223,12 @@ async function handleApi(req, res, urlPath) {
             { $set: { migratedTo: sid, migratedAt: new Date().toISOString() } }).catch(() => {});
         }
       }
-      return sendJson(res, 200, { state: doc ? doc.state : null, updatedAt: doc ? doc.updatedAt : null });
+      return sendJson(res, 200, { state: doc ? doc.state : null, updatedAt: doc ? doc.updatedAt : null,
+        shared: false, owner: me._id, you: me._id });
     } catch (e) { return sendJson(res, 503, { error: e.message }); }
   }
 
-  // PUT /api/state — upsert the whole workspace state
+  // PUT /api/state — upsert the whole workspace state (owner only; members are read-only)
   if (urlPath === '/api/state' && req.method === 'PUT') {
     try {
       const raw = await readBody(req, 16 * 1024 * 1024); // 16 MB cap
@@ -208,12 +236,21 @@ async function handleApi(req, res, urlPath) {
       try { state = JSON.parse(raw); } catch (_) { return sendJson(res, 400, { error: 'Invalid JSON' }); }
       if (!state || typeof state !== 'object') return sendJson(res, 400, { error: 'Expected a state object' });
       const db = await getDb();
+      const { shared } = await resolveOwner(db, me);
+      if (shared) return sendJson(res, 403, { error: 'Read-only: this is a shared workspace you were invited to.' });
       const updatedAt = new Date().toISOString();
       await db.collection(STATE_COLLECTION).updateOne(
         { _id: stateIdFor(me) },
         { $set: { state, updatedAt, updatedBy: me._id } },
         { upsert: true }
       );
+      // Keep the invite index in sync with the workspace's people directory.
+      const members = memberEmailsOf(state, me._id);
+      const mcol = db.collection(MEMBERSHIPS);
+      for (const m of members) {
+        await mcol.updateOne({ _id: m }, { $set: { _id: m, owner: me._id, updatedAt } }, { upsert: true }).catch(() => {});
+      }
+      await mcol.deleteMany({ owner: me._id, _id: { $nin: members } }).catch(() => {});
       return sendJson(res, 200, { ok: true, updatedAt });
     } catch (e) {
       const code = /too large/i.test(e.message) ? 413 : 503;

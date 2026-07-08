@@ -1831,9 +1831,10 @@ Chad,chad@cen.com,Austin"></textarea>
 
   // ---- backend sync (state persisted to MongoDB via /api/state) ----
   let _pushT=null, _syncing=false, _remoteOn=true;
+  let _readOnly=false, _wsOwner=null;   // set when viewing a workspace you were invited into
   function setSyncDot(s){ const el=document.getElementById('sync-dot'); if(el){ el.dataset.state=s; el.title='Cloud sync: '+s; } }
   function pushRemote(){
-    if(!_remoteOn || _syncing || !_token) return;   // must be signed in; don't echo a state we just pulled
+    if(_readOnly || !_remoteOn || _syncing || !_token) return;   // invited members are read-only; never write back
     clearTimeout(_pushT);
     setSyncDot('pending');
     _pushT=setTimeout(()=>{
@@ -1849,6 +1850,10 @@ Chad,chad@cen.com,Austin"></textarea>
       if(r.status===401){ onSignedOut(); return; }
       if(!r.ok){ _remoteOn=(r.status!==404); return; }
       const j=await r.json();
+      _readOnly = !!(j && j.readOnly);          // invited member → read-only shared workspace
+      _wsOwner  = (j && j.owner) || null;
+      document.body.classList.toggle('read-only', _readOnly);
+      renderReadOnlyBanner();
       if(j && j.state){
         // A saved state exists — load it, even if it has zero boards. An empty account
         // is a real state and must NOT be overwritten by the local sample seed.
@@ -1940,8 +1945,30 @@ Chad,chad@cen.com,Austin"></textarea>
   // Demo mode: hide sample content when turned off
   const showDemo = () => state.demo !== false;
   const isVisible = o => showDemo() || !(o && o.demo);
+  // ---- Per-member group visibility (only enforced for invited/read-only members; owner sees all) ----
+  const _norm = e => String(e||'').trim().toLowerCase();
+  function myPerson(){ if(!_me) return null; return (state.people||[]).find(p=>_norm(p.email)===_norm(_me.email)) || null; }
+  function groupAllowed(g){
+    if(!_readOnly) return true;                       // owner / full access → everything visible
+    const m=g&&g.members; const ppl=(m&&m.people)||[], teams=(m&&m.teams)||[];
+    if(!ppl.length && !teams.length) return true;     // group isn't restricted
+    const me=myPerson(); if(!me) return false;
+    if(ppl.includes(me.id)) return true;
+    return teams.some(tid=>{ const t=(state.teams||[]).find(x=>x.id===tid); return t && (t.members||[]).includes(me.id); });
+  }
+  const groupShown = g => isVisible(g) && groupAllowed(g);
+  function renderReadOnlyBanner(){
+    let el=document.getElementById('ro-banner');
+    if(_readOnly){
+      if(!el){ el=document.createElement('div'); el.id='ro-banner';
+        el.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9998;background:#3b5bdb;color:#fff;font:600 12px/1.7 ui-sans-serif,system-ui,sans-serif;text-align:center;padding:5px 12px';
+        document.body.appendChild(el); }
+      el.textContent='👁 Read-only — shared with you by '+(_wsOwner||'the owner')+'. You can view the groups you’ve been given access to.';
+      el.style.display='';
+    } else if(el){ el.style.display='none'; }
+  }
   const boardVisible = bd => isVisible(bd) && !bd.archived;    // hide archived + demo-filtered boards
-  const visibleItems = () => b().groups.filter(g=>isVisible(g)&&!g.archived).flatMap(g=>g.items.filter(it=>isVisible(it)&&!it.archived));
+  const visibleItems = () => b().groups.filter(g=>groupShown(g)&&!g.archived).flatMap(g=>g.items.filter(it=>isVisible(it)&&!it.archived));
   // the active board only if it's real, visible and in the active space (else null → show onboarding)
   function currentBoard(){ const bd=state.boards[state.activeBoard]; return (bd && boardVisible(bd) && bd.spaceId===state.activeSpace)?bd:null; }
   function boardsInActiveSpace(){ return state.boards.some(bd=>bd.spaceId===state.activeSpace && boardVisible(bd)); }
@@ -2196,17 +2223,23 @@ Chad,chad@cen.com,Austin"></textarea>
   function groupMembersHtml(g){
     const m=groupMembers(g);
     const ppl=m.people.map(id=>personById(id)).filter(Boolean);
-    const limited = ppl.length;
-    return `${limited?'<span class="gh-lock" title="Limited visibility">🔒</span>':''}${ppl.map(p=>avatarHtml(p,22)).join('')}<span class="gh-add-member" title="${limited?'Edit who can see this group':'Limit visibility to specific members'}">＋</span>`;
+    const limited = ppl.length || (m.teams && m.teams.length);
+    return `${limited?'<span class="gh-lock" title="Limited visibility">🔒</span>':''}${ppl.map(p=>avatarHtml(p,22)).join('')}<span class="gh-add-member" title="${limited?'Edit who can see this group':'Limit visibility to specific people or teams'}">＋</span>`;
   }
   function openGroupMembersPicker(anchor, g){
     const rect=anchor.getBoundingClientRect();
     const m=groupMembers(g);
     (function build(){
-      const limited = m.people.length;
-      let html=`<div class="pop-section">Limited visibility to</div><div class="settings-note" style="padding:0 8px 8px">${limited?'Only these members can see this group.':'Visible to everyone. Select members to restrict it.'}</div>`;
+      const limited = m.people.length || m.teams.length;
+      let html=`<div class="pop-section">Who can see this group</div><div class="settings-note" style="padding:0 8px 8px">${limited?'Only the selected people / teams can see this group.':'Visible to everyone. Select people or teams to restrict it.'}</div>`;
+      if(state.teams && state.teams.length){
+        html+=`<div class="pop-section">Teams</div>`;
+        html+=state.teams.map(t=>`<div class="pop-row ${m.teams.includes(t.id)?'sel':''}" data-tid="${t.id}"><span class="team-sq">👥</span><span class="nm">${esc(t.name)}</span><span class="check">✓</span></div>`).join('');
+      }
+      html+=`<div class="pop-section">People</div>`;
       html+=state.people.map(p=>`<div class="pop-row ${m.people.includes(p.id)?'sel':''}" data-uid="${p.id}">${avatarHtml(p,26)}<span class="nm">${esc(p.name)}${p.me?' (you)':''}</span><span class="check">✓</span></div>`).join('');
       popEl.innerHTML=html;
+      popEl.querySelectorAll('.pop-row[data-tid]').forEach(r=>r.addEventListener('click',()=>{ const id=r.dataset.tid; if(m.teams.includes(id)) m.teams=m.teams.filter(x=>x!==id); else m.teams.push(id); save(); renderTable(); renderBoard(); build(); positionAt(rect); }));
       popEl.querySelectorAll('.pop-row[data-uid]').forEach(r=>r.addEventListener('click',()=>{ const id=r.dataset.uid; if(m.people.includes(id)) m.people=m.people.filter(x=>x!==id); else m.people.push(id); save(); renderTable(); renderBoard(); build(); positionAt(rect); }));
     })();
     showPopover(rect);
@@ -2571,7 +2604,7 @@ Chad,chad@cen.com,Austin"></textarea>
     rowsEl.innerHTML='';
     if(!currentBoard()) return;   // no board → onboarding handles the view
     const searching = itemFilter.trim() !== '';
-    b().groups.filter(g=>isVisible(g) && (state.showArchived || !g.archived)).forEach((g,gi)=>{
+    b().groups.filter(g=>groupShown(g) && (state.showArchived || !g.archived)).forEach((g,gi)=>{
       const gItems=sortItems(g.items.filter(it=>isVisible(it)&&!it.archived).filter(matchesFilter));
       if(searching && gItems.length===0) return;   // hide groups with no matches while searching
       if(gi>0){                                     // spacing between groups
@@ -2651,7 +2684,7 @@ Chad,chad@cen.com,Austin"></textarea>
     columnsEl.innerHTML='';
     if(!currentBoard()) return;   // no board → onboarding handles the view
     // Kanban columns = the board's GROUPS (status shows as a pill on each card)
-    b().groups.filter(g=>isVisible(g) && (state.showArchived || !g.archived)).forEach(g=>{
+    b().groups.filter(g=>groupShown(g) && (state.showArchived || !g.archived)).forEach(g=>{
       const cards = sortItems(g.items.filter(it=>isVisible(it)&&!it.archived).filter(matchesFilter));
       const colEl=document.createElement('div');
       colEl.className='column'+(g.archived?' col-archived':'');
