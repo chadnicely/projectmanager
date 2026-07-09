@@ -1720,6 +1720,16 @@ Chad,chad@cen.com,Austin"></textarea>
       });
     }));
   });
+  // Labels are per-card now: fold any old group-wide labels onto each card, then drop them.
+  if(!state.labelsPerCard){
+    state.boards.forEach(bd=>(bd.groups||[]).forEach(g=>{
+      if(Array.isArray(g.labels) && g.labels.length){
+        (g.items||[]).forEach(it=>{ it.labels=it.labels||[]; g.labels.forEach(id=>{ if(!it.labels.includes(id)) it.labels.push(id); }); });
+      }
+      delete g.labels;
+    }));
+    state.labelsPerCard=true;
+  }
   // Label colors v2: retire the old Trello stock colors for the app palette (customized colors untouched).
   if(!state.labelColorsV2){
     const remap={'#61bd4f':'#40b869','#f2d600':'#eaa32a','#ff9f1a':'#f0a020','#eb5a46':'#e2445c','#c377e0':'#a23bc7','#0079bf':'#2f9be0'};
@@ -1919,14 +1929,10 @@ Chad,chad@cen.com,Austin"></textarea>
     if(!bd.labelDefs) bd.labelDefs=DEFAULT_LABEL_COLORS.map(c=>({id:'lb'+(state.nextId++), name:'', color:c}));
     return bd.labelDefs;
   }
-  // A card's labels = its group's labels (universal to the whole group) + any card-specific labels, de-duped.
-  function itemLabels(it, g){
+  // A card's labels are per-card only (it.labels). Labels are never applied group-wide.
+  function itemLabels(it){
     const defs=boardLabelDefs();
-    if(g===undefined){ const f=findItem(it.id); g=f?f.g:null; }
-    const ids=[];
-    if(g && Array.isArray(g.labels)) g.labels.forEach(id=>{ if(!ids.includes(id)) ids.push(id); });
-    (it.labels||[]).forEach(id=>{ if(!ids.includes(id)) ids.push(id); });
-    return ids.map(id=>defs.find(d=>d.id===id)).filter(Boolean);
+    return (it.labels||[]).map(id=>defs.find(d=>d.id===id)).filter(Boolean);
   }
   function labelChips(it, g){ return itemLabels(it,g).map(d=>`<span class="lchip${d.name?'':' lchip-bare'}" style="background:${d.color}" title="${esc(d.name)}">${d.name?esc(d.name):'&nbsp;'}</span>`).join(''); }
   function wireQuickBadges(root, it){
@@ -2251,13 +2257,11 @@ Chad,chad@cen.com,Austin"></textarea>
       : `<div class="pop-row" id="gm-arch"><span>${MI.archive}</span><span class="nm">Archive group</span></div>`;
     popEl.innerHTML=`<div class="pop-row" id="gm-ren"><span>${MI.rename}</span><span class="nm">Rename group</span></div>`+
       `<div class="pop-row" id="gm-clone"><span>${MI.dup}</span><span class="nm">Clone group</span></div>`+
-      `<div class="pop-row" id="gm-labels"><span>${MI.label}</span><span class="nm">Add Label</span></div>`+
       `<div class="pop-row" id="gm-color"><span><span class="gm-sw" style="background:${g.color}"></span></span><span class="nm">Group color</span></div>`+
       archRow+
       `<div class="pop-row" id="gm-del"><span>${MI.trash}</span><span class="nm">Delete group</span></div>`;
     popEl.querySelector('#gm-ren').addEventListener('click',()=>{ closePopover(); renameGroup(g); });
     popEl.querySelector('#gm-clone').addEventListener('click',()=>{ closePopover(); cloneGroup(g); });
-    popEl.querySelector('#gm-labels').addEventListener('click',()=>{ openGroupLabelsPopover(anchor, g); });
     popEl.querySelector('#gm-color').addEventListener('click',()=>{ openColorPopover(anchor, c=>{ g.color=c; save(); renderTable(); renderBoard(); }); });
     popEl.querySelector('#gm-arch').addEventListener('click',()=>{ closePopover(); g.archived=!g.archived; save(); renderTable(); renderBoard(); });
     popEl.querySelector('#gm-del').addEventListener('click',()=>{ closePopover(); deleteGroup(g); });
