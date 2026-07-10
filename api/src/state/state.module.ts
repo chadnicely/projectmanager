@@ -7,5 +7,6 @@ import { StateService } from './state.service';
   imports: [AuthModule],
   controllers: [StateController],
   providers: [StateService],
+  exports: [StateService],
 })
 export class StateModule {}
