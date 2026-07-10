@@ -1,4 +1,6 @@
 node_modules
+.nuxt
+.output
+.data
 dist
 *.local
-.vite

@@ -3,22 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Base — React + Vite + TypeScript frontend (rewrite of public/index.html).",
+  "description": "Base — Nuxt 3 (Vue) frontend (rewrite of public/index.html).",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "nuxt": "^3.13.0",
+    "vue": "^3.5.0"
   },
-  "devDependencies": {
-    "@types/react": "^18.3.5",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.2"
+  "overrides": {
+    "vite": "6.3.5"
   }
 }

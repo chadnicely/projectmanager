@@ -1,10 +1,9 @@
-// Typed client for the existing Base backend (same endpoints the old app used).
-import type { User, WorkspaceState } from "./types";
+import type { User, WorkspaceState } from "~/types";
 
 const TOKEN_KEY = "pc-token";
-export const getToken = () => localStorage.getItem(TOKEN_KEY) || "";
-export const setToken = (t: string) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+export const getToken = () => (import.meta.client ? localStorage.getItem(TOKEN_KEY) || "" : "");
+export const setToken = (t: string) => { if (import.meta.client) localStorage.setItem(TOKEN_KEY, t); };
+export const clearToken = () => { if (import.meta.client) localStorage.removeItem(TOKEN_KEY); };
 
 export class ApiError extends Error {
   status: number;
@@ -22,10 +21,10 @@ async function req<T>(path: string, opts: { method?: string; body?: unknown; aut
     cache: "no-store",
   });
   const text = await res.text();
-  let data: unknown = undefined;
+  let data: unknown;
   try { data = text ? JSON.parse(text) : undefined; } catch { data = text; }
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && "error" in data) ? String((data as { error: unknown }).error) : res.statusText;
+    const msg = data && typeof data === "object" && "error" in data ? String((data as { error: unknown }).error) : res.statusText;
     throw new ApiError(res.status, msg);
   }
   return data as T;
@@ -42,14 +41,11 @@ export interface StateResponse {
 
 export const api = {
   health: () => req<{ ok: boolean; db: string }>("/api/health"),
-  signup: (email: string, password: string, name?: string) =>
-    req<{ token: string; user: User }>("/api/signup", { method: "POST", body: { email, password, name } }),
-  login: (email: string, password: string) =>
-    req<{ token: string; user: User }>("/api/login", { method: "POST", body: { email, password } }),
+  signup: (email: string, password: string, name?: string) => req<{ token: string; user: User }>("/api/signup", { method: "POST", body: { email, password, name } }),
+  login: (email: string, password: string) => req<{ token: string; user: User }>("/api/login", { method: "POST", body: { email, password } }),
   logout: () => req<{ ok: boolean }>("/api/logout", { method: "POST", auth: true }),
   me: () => req<{ user: User }>("/api/me", { auth: true }),
   getState: () => req<StateResponse>("/api/state", { auth: true }),
   putState: (state: WorkspaceState) => req<{ ok: boolean; updatedAt: string }>("/api/state", { method: "PUT", body: state, auth: true }),
-  op: (op: string, args: Record<string, unknown> = {}) =>
-    req<{ ok: boolean; result?: unknown }>("/api/op", { method: "POST", body: { op, ...args }, auth: true }),
+  op: (op: string, args: Record<string, unknown> = {}) => req<{ ok: boolean; result?: unknown }>("/api/op", { method: "POST", body: { op, ...args }, auth: true }),
 };
