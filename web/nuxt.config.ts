@@ -14,9 +14,10 @@ export default defineNuxtConfig({
   },
   // Dev: proxy the API + MCP to the NestJS backend.
   nitro: {
+    // devProxy replaces the matched prefix, so include it in the target to preserve the path.
     devProxy: {
-      "/api": { target: API, changeOrigin: true },
-      "/mcp": { target: API, changeOrigin: true },
+      "/api": { target: API + "/api", changeOrigin: true },
+      "/mcp": { target: API + "/mcp", changeOrigin: true },
     },
   },
   compatibilityDate: "2024-09-01",
