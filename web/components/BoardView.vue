@@ -13,7 +13,7 @@
       </div>
       <table class="cards">
         <tbody>
-          <tr v-for="c in g.items" :key="c.id" class="card-row">
+          <tr v-for="c in g.items" :key="c.id" class="card-row" @click="openCard(c.id)">
             <td class="c-name">
               <span>{{ c.name }}</span>
               <span v-if="labelsFor(c).length" class="chips">
@@ -47,7 +47,7 @@
 import { computed } from "vue";
 import type { Board, Card, WorkspaceState } from "~/types";
 
-const { workspace, update } = useWorkspace();
+const { workspace, update, openCard } = useWorkspace();
 const initials = (n: string) => (n || "?").trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 const demoOn = computed(() => workspace.value?.demo !== false);
 

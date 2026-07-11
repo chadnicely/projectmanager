@@ -13,6 +13,7 @@
         </div>
       </main>
     </div>
+    <CardDrawer />
   </div>
 </template>
 

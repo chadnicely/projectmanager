@@ -9,6 +9,7 @@ const readOnly = ref(false);
 const owner = ref<string | null>(null);
 const sync = ref<"idle" | "pending" | "ok" | "err">("idle");
 const booting = ref(true);
+const openCardId = ref<number | string | null>(null);
 let pushT: ReturnType<typeof setTimeout> | null = null;
 
 async function loadState() {
@@ -53,5 +54,20 @@ export function useWorkspace() {
     scheduleSave(next);
   }
 
-  return { user, workspace, readOnly, owner, sync, booting, boot, signIn, signOut, update };
+  // Mutate a single card on the active board (locates it by id, then persists).
+  function updateCard(id: number | string, fn: (card: import("~/types").Card, draft: WorkspaceState) => void) {
+    update((d) => {
+      const b = d.boards[d.activeBoard];
+      if (!b) return;
+      for (const g of b.groups) {
+        const it = g.items.find((x) => String(x.id) === String(id));
+        if (it) { fn(it, d); return; }
+      }
+    });
+  }
+
+  const openCard = (id: number | string) => { openCardId.value = id; };
+  const closeCard = () => { openCardId.value = null; };
+
+  return { user, workspace, readOnly, owner, sync, booting, openCardId, boot, signIn, signOut, update, updateCard, openCard, closeCard };
 }
