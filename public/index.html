@@ -2220,8 +2220,10 @@ Chad,chad@cen.com,Austin"></textarea>
     const rect=anchor.getBoundingClientRect();
     popEl.innerHTML=`<div class="pop-section">Highlight</div>`+
       `<div class="hl-palette">${HL_COLORS.map(c=>`<span class="hl-sw ${it.highlight===c?'on':''}" data-hl="${c}" style="background:${c}"></span>`).join('')}<span class="hl-sw hl-none ${it.highlight?'':'on'}" data-hl="" title="No highlight">✕</span></div>`+
+      `<div class="pop-row" id="im-labels"><span>${MI.label}</span><span class="nm">Labels</span></div>`+
       `<div class="pop-row" id="im-arch"><span>${MI.archive}</span><span class="nm">Archive item</span></div><div class="pop-row" id="im-del"><span>${MI.trash}</span><span class="nm">Delete item</span></div>`;
     popEl.querySelectorAll('.hl-sw').forEach(sw=>sw.addEventListener('click',()=>{ it.highlight = sw.dataset.hl || undefined; save(); renderTable(); renderBoard(); closePopover(); }));
+    popEl.querySelector('#im-labels').addEventListener('click',()=>{ openLabelsPopover(anchor, it); });
     popEl.querySelector('#im-arch').addEventListener('click',()=>{ closePopover(); it.archived=true; if(currentId===it.id) closeDrawer(); selectedIds.delete(it.id); renderSelBar(); save(); renderTable(); renderBoard(); });
     popEl.querySelector('#im-del').addEventListener('click',()=>{ closePopover(); deleteItem(it.id); });
     showPopover(rect);
