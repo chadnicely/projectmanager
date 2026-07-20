@@ -1,0 +1,35 @@
+{
+  "name": "base-desktop",
+  "version": "1.0.0",
+  "description": "Base — desktop wrapper for pm.nicelycontrol.com",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "author": "Nicely Control",
+  "license": "UNLICENSED",
+  "build": {
+    "appId": "com.nicelycontrol.base",
+    "productName": "Base",
+    "files": ["main.js", "preload-sticky.js", "icon.png"],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}

@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Base — Today</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font:13px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:#1b1f27;color:#e6e9ef;display:flex;flex-direction:column;overflow:hidden;
+  }
+  /* Title bar — doubles as the drag handle for the frameless desktop window */
+  .bar{
+    -webkit-app-region:drag;user-select:none;
+    display:flex;align-items:center;gap:8px;
+    padding:9px 10px;background:#151922;border-bottom:1px solid #2a3040;flex:0 0 auto;
+  }
+  .bar h1{font-size:12px;font-weight:600;margin:0;letter-spacing:.3px;color:#aeb6c4;flex:1}
+  .bar .dot{width:9px;height:9px;border-radius:50%;background:#f0a020}
+  .bar button{-webkit-app-region:no-drag}
+  .x{
+    background:none;border:0;color:#6b7484;font-size:16px;line-height:1;
+    cursor:pointer;padding:2px 5px;border-radius:4px;
+  }
+  .x:hover{background:#2a3040;color:#e6e9ef}
+
+  .add{padding:9px 10px;flex:0 0 auto;border-bottom:1px solid #232936}
+  .add input{
+    width:100%;padding:8px 10px;border-radius:7px;border:1px solid #2f3648;
+    background:#232936;color:#e6e9ef;font-size:13px;outline:none;
+  }
+  .add input:focus{border-color:#3b5bdb}
+  .add input::placeholder{color:#5d6678}
+
+  ul{list-style:none;margin:0;padding:6px;flex:1 1 auto;overflow-y:auto}
+  li{
+    display:flex;align-items:flex-start;gap:8px;
+    padding:7px 8px;border-radius:7px;margin-bottom:2px;
+  }
+  li:hover{background:#232936}
+  li .chk{
+    flex:0 0 auto;width:15px;height:15px;margin-top:1px;border-radius:4px;
+    border:1.5px solid #4b5468;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;font-size:10px;color:#1b1f27;
+  }
+  li.done .chk{background:#40b869;border-color:#40b869}
+  li.done .txt{text-decoration:line-through;color:#69707f}
+  .txt{flex:1 1 auto;word-break:break-word;cursor:text}
+  li .act{
+    flex:0 0 auto;display:flex;gap:2px;opacity:0;transition:opacity .12s;
+  }
+  li:hover .act{opacity:1}
+  .act button{
+    background:none;border:0;cursor:pointer;color:#6b7484;
+    font-size:13px;padding:1px 4px;border-radius:4px;
+  }
+  .act .send:hover{background:#3b5bdb;color:#fff}
+  .act .del:hover{background:#e2445c;color:#fff}
+  .act button:disabled{opacity:.4;cursor:default}
+
+  .empty{color:#5d6678;text-align:center;padding:26px 14px;font-size:12px;line-height:1.6}
+
+  .foot{
+    flex:0 0 auto;border-top:1px solid #2a3040;background:#151922;padding:8px 10px;
+    display:flex;gap:6px;align-items:center;
+  }
+  .foot select{
+    flex:1 1 0;min-width:0;background:#232936;color:#c8cedb;font-size:11px;
+    border:1px solid #2f3648;border-radius:6px;padding:5px 6px;outline:none;cursor:pointer;
+  }
+  .toast{
+    position:absolute;left:10px;right:10px;bottom:46px;
+    background:#2c3446;border:1px solid #3d465c;border-radius:7px;
+    padding:8px 10px;font-size:12px;color:#dfe4ee;
+    opacity:0;transform:translateY(6px);transition:.18s;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:none}
+  .toast.err{background:#4a2530;border-color:#7d3242;color:#ffd9df}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <span class="dot"></span>
+  <h1>TODAY</h1>
+  <button class="x" id="hide" title="Hide (stays in the tray)">✕</button>
+</div>
+
+<div class="add">
+  <input id="new" placeholder="What are you working on?" autocomplete="off" spellcheck="false">
+</div>
+
+<ul id="list"></ul>
+
+<div class="toast" id="toast"></div>
+
+<div class="foot">
+  <select id="board" title="Board"></select>
+  <select id="group" title="Group"></select>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  var KEY   = 'base.sticky.items';
+  var DEST  = 'base.sticky.dest';
+  var listEl  = document.getElementById('list');
+  var inputEl = document.getElementById('new');
+  var boardEl = document.getElementById('board');
+  var groupEl = document.getElementById('group');
+  var toastEl = document.getElementById('toast');
+
+  var items = [];
+  try { items = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e) { items = []; }
+
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(items)); } catch(e){} }
+  function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  var toastTimer;
+  function toast(msg, isErr){
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.className = 'toast'; }, 2600);
+  }
+
+  /* ---------- rendering ---------- */
+  function render(){
+    if(!items.length){
+      listEl.innerHTML = '<div class="empty">Nothing yet.<br>Type above to jot down what you\'re working on.</div>';
+      return;
+    }
+    listEl.innerHTML = items.map(function(it, i){
+      return '<li class="' + (it.done ? 'done' : '') + '" data-i="' + i + '">' +
+        '<span class="chk">' + (it.done ? '✓' : '') + '</span>' +
+        '<span class="txt">' + esc(it.text) + '</span>' +
+        '<span class="act">' +
+          '<button class="send" title="Send to board">➜</button>' +
+          '<button class="del" title="Delete">✕</button>' +
+        '</span>' +
+      '</li>';
+    }).join('');
+  }
+
+  listEl.addEventListener('click', function(e){
+    var li = e.target.closest('li'); if(!li) return;
+    var i = +li.dataset.i;
+    if(e.target.classList.contains('chk')){ items[i].done = !items[i].done; save(); render(); }
+    else if(e.target.classList.contains('del')){ items.splice(i,1); save(); render(); }
+    else if(e.target.classList.contains('send')){ sendToBoard(i, e.target); }
+  });
+
+  inputEl.addEventListener('keydown', function(e){
+    if(e.key !== 'Enter') return;
+    var t = inputEl.value.trim(); if(!t) return;
+    items.unshift({ text:t, done:false });
+    inputEl.value = ''; save(); render();
+  });
+
+  /* ---------- Base API (same origin, so the session cookie rides along) ---------- */
+  function op(body){
+    return fetch('/api/op', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'same-origin',
+      body:JSON.stringify(body)
+    }).then(function(r){
+      return r.json().then(function(j){
+        if(!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+        return j.result !== undefined ? j.result : j;
+      });
+    });
+  }
+
+  function loadBoards(){
+    return op({op:'list_boards'}).then(function(bs){
+      if(!bs || !bs.length){ boardEl.innerHTML = '<option>No boards</option>'; return; }
+      boardEl.innerHTML = bs.map(function(b){
+        return '<option value="' + esc(b.name) + '">' + esc(b.name) + '</option>'; }).join('');
+      var saved = {};
+      try { saved = JSON.parse(localStorage.getItem(DEST)) || {}; } catch(e){}
+      if(saved.board && bs.some(function(b){ return b.name === saved.board; })) boardEl.value = saved.board;
+      return loadGroups(saved.group);
+    }).catch(function(err){
+      boardEl.innerHTML = '<option>' + esc(err.message) + '</option>';
+    });
+  }
+
+  function loadGroups(prefer){
+    if(!boardEl.value) return;
+    return op({op:'get_board', board:boardEl.value}).then(function(bd){
+      var gs = (bd && bd.groups) || [];
+      groupEl.innerHTML = gs.map(function(g){
+        return '<option value="' + esc(g.group) + '">' + esc(g.group) + '</option>'; }).join('');
+      if(prefer && gs.some(function(g){ return g.group === prefer; })) groupEl.value = prefer;
+      rememberDest();
+    });
+  }
+
+  function rememberDest(){
+    try { localStorage.setItem(DEST, JSON.stringify({ board:boardEl.value, group:groupEl.value })); } catch(e){}
+  }
+
+  boardEl.addEventListener('change', function(){ loadGroups(); });
+  groupEl.addEventListener('change', rememberDest);
+
+  function sendToBoard(i, btn){
+    var it = items[i];
+    if(!boardEl.value || !groupEl.value){ toast('Pick a board and group first', true); return; }
+    btn.disabled = true;
+    op({ op:'add_card', board:boardEl.value, group:groupEl.value, name:it.text })
+      .then(function(){
+        toast('Added to ' + groupEl.value);
+        items.splice(i,1); save(); render();
+      })
+      .catch(function(err){
+        btn.disabled = false;
+        toast(err.message, true);
+      });
+  }
+
+  /* ---------- desktop shell hooks (no-ops in a normal browser) ---------- */
+  document.getElementById('hide').addEventListener('click', function(){
+    if(window.baseSticky && window.baseSticky.hide) window.baseSticky.hide();
+    else window.close();
+  });
+
+  render();
+  loadBoards();
+  inputEl.focus();
+})();
+</script>
+</body>
+</html>

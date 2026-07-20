@@ -642,6 +642,7 @@ const TYPES = {
 // calls let Vercel's file tracer detect and bundle these files with the service.
 const STATIC = {};
 try { STATIC['/index.html'] = fs.readFileSync(path.join(__dirname, 'public', 'index.html')); } catch (_) {}
+try { STATIC['/sticky.html'] = fs.readFileSync(path.join(__dirname, 'public', 'sticky.html')); } catch (_) {}
 try { STATIC['/sw.js'] = fs.readFileSync(path.join(__dirname, 'public', 'sw.js')); } catch (_) {}
 try { STATIC['/manifest.webmanifest'] = fs.readFileSync(path.join(__dirname, 'public', 'manifest.webmanifest')); } catch (_) {}
 try { STATIC['/icon-192.png'] = fs.readFileSync(path.join(__dirname, 'public', 'icon-192.png')); } catch (_) {}
