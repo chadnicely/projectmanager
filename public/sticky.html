@@ -50,6 +50,8 @@
   li.done .txt{text-decoration:line-through;color:#69707f}
   .txt{flex:1 1 auto;word-break:break-word;cursor:text}
   /* Time added; becomes an amber age badge once an item carries into a new day. */
+  /* Sits outside .txt so the strike-through doesn't run through it. */
+  .yay{flex:0 0 auto;font-size:12px;line-height:1.3}
   .when{flex:0 0 auto;font-size:10px;color:#5d6678;margin-top:2px;white-space:nowrap}
   .when.old{color:#f0a020;font-weight:600}
   li:hover .when{display:none}
@@ -174,6 +176,7 @@
       return '<li class="' + (it.done ? 'done' : '') + '" data-i="' + i + '">' +
         '<span class="chk">' + (it.done ? '✓' : '') + '</span>' +
         '<span class="txt">' + esc(it.text) + '</span>' +
+        (it.done ? '<span class="yay">😊</span>' : '') +
         stampHtml(it) +
         '<span class="act">' +
           '<button class="send" title="Send to board">➜</button>' +
