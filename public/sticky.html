@@ -17,7 +17,8 @@
     display:flex;align-items:center;gap:8px;
     padding:9px 10px;background:#151922;border-bottom:1px solid #2a3040;flex:0 0 auto;
   }
-  .bar h1{font-size:12px;font-weight:600;margin:0;letter-spacing:.3px;color:#aeb6c4;flex:1}
+  .bar h1{font-size:12px;font-weight:600;margin:0;letter-spacing:.3px;color:#aeb6c4}
+  .bar .date{flex:1;font-size:11px;color:#69707f;-webkit-app-region:drag}
   .bar .dot{width:9px;height:9px;border-radius:50%;background:#f0a020}
   .bar button{-webkit-app-region:no-drag}
   .x{
@@ -48,6 +49,10 @@
   li.done .chk{background:#40b869;border-color:#40b869}
   li.done .txt{text-decoration:line-through;color:#69707f}
   .txt{flex:1 1 auto;word-break:break-word;cursor:text}
+  /* Time added; becomes an amber age badge once an item carries into a new day. */
+  .when{flex:0 0 auto;font-size:10px;color:#5d6678;margin-top:2px;white-space:nowrap}
+  .when.old{color:#f0a020;font-weight:600}
+  li:hover .when{display:none}
   li .act{
     flex:0 0 auto;display:flex;gap:2px;opacity:0;transition:opacity .12s;
   }
@@ -85,7 +90,8 @@
 <div class="bar">
   <span class="dot"></span>
   <h1>TODAY</h1>
-  <button class="x" id="hide" title="Hide (stays in the tray)">✕</button>
+  <span class="date" id="date"></span>
+  <button class="x" id="hide" title="Hide (Ctrl+Shift+Space)">✕</button>
 </div>
 
 <div class="add">
@@ -115,6 +121,36 @@
 
   var items = [];
   try { items = JSON.parse(localStorage.getItem(KEY)) || []; } catch(e) { items = []; }
+  // Items written before timestamps existed get stamped now, so they age from today
+  // rather than showing up as instantly stale.
+  items.forEach(function(it){ if(!it.at) it.at = Date.now(); });
+
+  function dayStart(ts){ var d = new Date(ts); d.setHours(0,0,0,0); return d.getTime(); }
+  function daysOld(at){ return Math.round((dayStart(Date.now()) - dayStart(at)) / 86400000); }
+
+  // At each new day: drop what was finished on a previous day, keep what's still open.
+  function rollover(){
+    var before = items.length;
+    items = items.filter(function(it){ return !(it.done && daysOld(it.at) >= 1); });
+    if(items.length !== before){ save(); return true; }
+    return false;
+  }
+
+  function stampHtml(it){
+    var d = daysOld(it.at);
+    if(d <= 0){
+      var t = new Date(it.at).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+      return '<span class="when">' + esc(t) + '</span>';
+    }
+    return '<span class="when old" title="Carried over from ' +
+      esc(new Date(it.at).toLocaleDateString([], { month:'short', day:'numeric' })) +
+      '">' + d + 'd</span>';
+  }
+
+  function paintDate(){
+    document.getElementById('date').textContent =
+      new Date().toLocaleDateString([], { weekday:'short', month:'short', day:'numeric' });
+  }
 
   function save(){ try { localStorage.setItem(KEY, JSON.stringify(items)); } catch(e){} }
   function esc(s){ return String(s).replace(/[&<>"]/g, function(c){
@@ -138,6 +174,7 @@
       return '<li class="' + (it.done ? 'done' : '') + '" data-i="' + i + '">' +
         '<span class="chk">' + (it.done ? '✓' : '') + '</span>' +
         '<span class="txt">' + esc(it.text) + '</span>' +
+        stampHtml(it) +
         '<span class="act">' +
           '<button class="send" title="Send to board">➜</button>' +
           '<button class="del" title="Delete">✕</button>' +
@@ -157,7 +194,7 @@
   inputEl.addEventListener('keydown', function(e){
     if(e.key !== 'Enter') return;
     var t = inputEl.value.trim(); if(!t) return;
-    items.unshift({ text:t, done:false });
+    items.unshift({ text:t, done:false, at:Date.now() });
     inputEl.value = ''; save(); render();
   });
 
@@ -229,6 +266,20 @@
     else window.close();
   });
 
+  // The note tends to stay open for days, so watch for the date changing under it
+  // instead of only rolling over at startup.
+  var today = dayStart(Date.now());
+  setInterval(function(){
+    var now = dayStart(Date.now());
+    if(now === today) return;
+    today = now;
+    rollover();
+    paintDate();
+    render();
+  }, 30000);
+
+  rollover();
+  paintDate();
   render();
   loadBoards();
   inputEl.focus();
